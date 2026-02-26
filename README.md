@@ -22,6 +22,19 @@ Output bundle:
 
 `vite.embed.config.ts` now replaces `process.env.NODE_ENV` at build time, so the browser bundle does not depend on a global `process` object. Source maps are disabled by default in embed builds.
 
+## Serve Dist Locally
+
+After building, serve the `dist` folder:
+
+```bash
+npx serve dist -l 8081
+```
+
+Then access:
+
+- `http://localhost:8081/kritibot-widget.js`
+- `http://localhost:8081/kritibot-widget.sri.json`
+
 ## Script-tag usage
 
 ```html
