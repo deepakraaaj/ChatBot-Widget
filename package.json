@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build --config vite.embed.config.ts && npm run build:sri",
     "build:sri": "node scripts/generate-sri.mjs",
+    "build:watch": "vite build --config vite.embed.config.ts --watch",
     "preview": "vite preview"
   },
   "dependencies": {

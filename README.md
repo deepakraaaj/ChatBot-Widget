@@ -27,13 +27,24 @@ Output bundle:
 After building, serve the `dist` folder:
 
 ```bash
-npx serve dist -l 8081
+npx serve -l 8081 --config serve.json
 ```
 
 Then access:
 
 - `http://localhost:8081/kritibot-widget.js`
 - `http://localhost:8081/kritibot-widget.sri.json`
+
+If you are iterating on source changes, rebuild continuously in a second terminal:
+
+```bash
+npm run build:watch
+```
+
+Notes:
+
+- `304 Not Modified` responses are normal revalidation behavior.
+- If your widget changes are not visible, make sure the `dist/kritibot-widget.js` timestamp changes after edits (watch mode above handles this).
 
 ## Script-tag usage
 

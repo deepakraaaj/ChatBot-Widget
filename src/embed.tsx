@@ -8,6 +8,7 @@ import {
   ChatRuntimeContext,
   setChatRuntimeConfig,
 } from "./hooks/useChat";
+import { setIsOpen } from "./store/chatSlice";
 import { createWidgetStore } from "./store/widgetStore";
 import widgetStyles from "./widget.css?inline";
 
@@ -54,10 +55,21 @@ interface KritiBotGlobalState {
 
 const ROOT_ATTR = "data-kritibot-root";
 const API_VERSION = 1;
+const initialScriptTag =
+  typeof document !== "undefined"
+    ? (document.currentScript as HTMLScriptElement | null)
+    : null;
 
 function parseBoolean(value?: string): boolean | undefined {
   if (value === undefined) return undefined;
-  return value.toLowerCase() === "true";
+
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return undefined;
+
+  if (normalized === "true" || normalized === "1") return true;
+  if (normalized === "false" || normalized === "0") return false;
+
+  return undefined;
 }
 
 function parseHeaders(value?: string): Record<string, string> | undefined {
@@ -96,14 +108,29 @@ function resolveTarget(target: EmbedTarget | undefined): HTMLElement {
   }
 
   if (typeof target === "string") {
-    const found = document.querySelector<HTMLElement>(target);
-    if (found) return found;
-    console.error(
-      `KritiBot: target selector "${target}" was not found. Falling back to document.body.`
-    );
+    const selector = target.trim();
+
+    if (selector) {
+      try {
+        const found = document.querySelector<HTMLElement>(selector);
+        if (found) return found;
+        console.error(
+          `KritiBot: target selector "${selector}" was not found. Falling back to document.body.`
+        );
+      } catch (error) {
+        console.error(
+          `KritiBot: target selector "${selector}" is invalid. Falling back to document.body.`,
+          error
+        );
+      }
+    }
   }
 
-  return document.body;
+  if (document.body) {
+    return document.body;
+  }
+
+  return document.documentElement;
 }
 
 function extractContext(config: EmbedInitConfig): ChatRuntimeContext | undefined {
@@ -180,7 +207,7 @@ function readScriptConfig(script: HTMLScriptElement | null): EmbedInitConfig {
   } = script.dataset;
 
   return {
-    target,
+    target: target?.trim() || undefined,
     backendUrl,
     userId,
     userName,
@@ -226,6 +253,9 @@ function createMount(config: EmbedInitConfig): WidgetMountRef {
   const root = createRoot(mountElement);
 
   setChatRuntimeConfig(toRuntimeConfig(config));
+  if (config.openOnLoad) {
+    store.dispatch(setIsOpen(true));
+  }
 
   root.render(
     <StrictMode>
@@ -283,14 +313,13 @@ function destroyWidget() {
   setChatRuntimeConfig();
 }
 
-function applyCurrentScriptConfig() {
+function applyCurrentScriptConfig(script: HTMLScriptElement | null) {
   const state = getOrCreateState();
   if (!state || typeof document === "undefined") return;
 
-  const initialScript = document.currentScript as HTMLScriptElement | null;
   state.scriptConfig = mergeConfig(
     state.scriptConfig,
-    readScriptConfig(initialScript)
+    readScriptConfig(script)
   );
 }
 
@@ -376,7 +405,7 @@ function bootstrapEmbed() {
   const state = getOrCreateState();
   if (!state) return;
 
-  applyCurrentScriptConfig();
+  applyCurrentScriptConfig(initialScriptTag);
 
   const binding = bindGlobalApi();
   if (!binding) return;
@@ -392,6 +421,22 @@ function bootstrapEmbed() {
   flushQueuedCommands(binding.api, binding.queuedCommands);
 }
 
+function bootstrapWhenReady() {
+  if (typeof document === "undefined") {
+    bootstrapEmbed();
+    return;
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bootstrapEmbed, {
+      once: true,
+    });
+    return;
+  }
+
+  bootstrapEmbed();
+}
+
 declare global {
   interface Window {
     KritiBot?: KritiBotApi;
@@ -399,6 +444,6 @@ declare global {
   }
 }
 
-bootstrapEmbed();
+bootstrapWhenReady();
 
 export type { EmbedInitConfig, KritiBotApi };
