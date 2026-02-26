@@ -1,0 +1,32 @@
+{
+  "name": "kritibot-widget",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build --config vite.embed.config.ts && npm run build:sri",
+    "build:sri": "node scripts/generate-sri.mjs",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@reduxjs/toolkit": "^2.9.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-redux": "^9.2.0",
+    "tailwind-merge": "^3.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.13",
+    "@types/node": "^25.3.1",
+    "@types/react": "^19.0.12",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.13",
+    "tailwindcss-motion": "^1.1.1",
+    "typescript": "~5.7.2",
+    "vite": "^6.1.0",
+    "vite-plugin-svgr": "^4.3.0"
+  }
+}

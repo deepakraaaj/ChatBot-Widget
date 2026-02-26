@@ -1,0 +1,404 @@
+import { StrictMode } from "react";
+import { createRoot, Root } from "react-dom/client";
+import { Provider } from "react-redux";
+
+import ChatWidget from "./components/ChatWidget";
+import {
+  ChatRuntimeConfig,
+  ChatRuntimeContext,
+  setChatRuntimeConfig,
+} from "./hooks/useChat";
+import { createWidgetStore } from "./store/widgetStore";
+import widgetStyles from "./widget.css?inline";
+
+declare const __KRITIBOT_WIDGET_VERSION__: string;
+
+type EmbedTarget = string | HTMLElement;
+
+interface EmbedInitConfig {
+  target?: EmbedTarget;
+  backendUrl?: string;
+  userId?: string;
+  userName?: string;
+  companyId?: string;
+  companyName?: string;
+  requestHeaders?: Record<string, string>;
+  openOnLoad?: boolean;
+  autoInit?: boolean;
+}
+
+type KritiBotQueuedCommand =
+  | ["init", EmbedInitConfig?]
+  | ["update", Partial<EmbedInitConfig>]
+  | ["destroy"];
+
+interface KritiBotApi {
+  init: (config?: EmbedInitConfig) => void;
+  update: (config: Partial<EmbedInitConfig>) => void;
+  destroy: () => void;
+  version: string;
+  apiVersion: number;
+  q?: KritiBotQueuedCommand[];
+}
+
+interface WidgetMountRef {
+  hostElement: HTMLDivElement;
+  root: Root;
+}
+
+interface KritiBotGlobalState {
+  activeMount: WidgetMountRef | null;
+  currentConfig: EmbedInitConfig;
+  scriptConfig: EmbedInitConfig;
+}
+
+const ROOT_ATTR = "data-kritibot-root";
+const API_VERSION = 1;
+
+function parseBoolean(value?: string): boolean | undefined {
+  if (value === undefined) return undefined;
+  return value.toLowerCase() === "true";
+}
+
+function parseHeaders(value?: string): Record<string, string> | undefined {
+  if (!value) return undefined;
+
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return undefined;
+    }
+
+    return Object.entries(parsed).reduce<Record<string, string>>(
+      (acc, [key, entryValue]) => {
+        if (typeof entryValue === "string") {
+          acc[key] = entryValue;
+        }
+        return acc;
+      },
+      {}
+    );
+  } catch {
+    console.error(
+      "KritiBot: failed to parse data-request-headers JSON. Ignoring it."
+    );
+    return undefined;
+  }
+}
+
+function isHTMLElement(target: EmbedTarget | undefined): target is HTMLElement {
+  return typeof HTMLElement !== "undefined" && target instanceof HTMLElement;
+}
+
+function resolveTarget(target: EmbedTarget | undefined): HTMLElement {
+  if (isHTMLElement(target)) {
+    return target;
+  }
+
+  if (typeof target === "string") {
+    const found = document.querySelector<HTMLElement>(target);
+    if (found) return found;
+    console.error(
+      `KritiBot: target selector "${target}" was not found. Falling back to document.body.`
+    );
+  }
+
+  return document.body;
+}
+
+function extractContext(config: EmbedInitConfig): ChatRuntimeContext | undefined {
+  const context: ChatRuntimeContext = {
+    userId: config.userId,
+    userName: config.userName,
+    companyId: config.companyId,
+    companyName: config.companyName,
+  };
+
+  if (
+    !context.userId &&
+    !context.userName &&
+    !context.companyId &&
+    !context.companyName
+  ) {
+    return undefined;
+  }
+
+  return context;
+}
+
+function toRuntimeConfig(config: EmbedInitConfig): ChatRuntimeConfig {
+  return {
+    backendUrl: config.backendUrl,
+    context: extractContext(config),
+    requestHeaders: config.requestHeaders,
+  };
+}
+
+function mergeConfig(
+  base: EmbedInitConfig,
+  patch: Partial<EmbedInitConfig>
+): EmbedInitConfig {
+  return {
+    ...base,
+    ...patch,
+    requestHeaders: {
+      ...(base.requestHeaders || {}),
+      ...(patch.requestHeaders || {}),
+    },
+  };
+}
+
+function toEmbedConfig(value: unknown): EmbedInitConfig | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as EmbedInitConfig;
+}
+
+function toEmbedPatchConfig(
+  value: unknown
+): Partial<EmbedInitConfig> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as Partial<EmbedInitConfig>;
+}
+
+function readScriptConfig(script: HTMLScriptElement | null): EmbedInitConfig {
+  if (!script) return {};
+
+  const {
+    target,
+    backendUrl,
+    userId,
+    userName,
+    companyId,
+    companyName,
+    requestHeaders,
+    openOnLoad,
+    autoInit,
+  } = script.dataset;
+
+  return {
+    target,
+    backendUrl,
+    userId,
+    userName,
+    companyId,
+    companyName,
+    requestHeaders: parseHeaders(requestHeaders),
+    openOnLoad: parseBoolean(openOnLoad),
+    autoInit: parseBoolean(autoInit),
+  };
+}
+
+function getOrCreateState(): KritiBotGlobalState | null {
+  if (typeof window === "undefined") return null;
+
+  if (!window.__KRITIBOT_WIDGET_STATE__) {
+    window.__KRITIBOT_WIDGET_STATE__ = {
+      activeMount: null,
+      currentConfig: {},
+      scriptConfig: {},
+    };
+  }
+
+  return window.__KRITIBOT_WIDGET_STATE__;
+}
+
+function createMount(config: EmbedInitConfig): WidgetMountRef {
+  const target = resolveTarget(config.target);
+  const hostElement = document.createElement("div");
+  hostElement.setAttribute(ROOT_ATTR, "true");
+
+  const shadowRoot = hostElement.attachShadow({ mode: "open" });
+  const styleTag = document.createElement("style");
+  styleTag.textContent = widgetStyles;
+
+  const mountElement = document.createElement("div");
+  mountElement.id = "kritibot-mount";
+
+  shadowRoot.appendChild(styleTag);
+  shadowRoot.appendChild(mountElement);
+  target.appendChild(hostElement);
+
+  const store = createWidgetStore();
+  const root = createRoot(mountElement);
+
+  setChatRuntimeConfig(toRuntimeConfig(config));
+
+  root.render(
+    <StrictMode>
+      <Provider store={store}>
+        <ChatWidget />
+      </Provider>
+    </StrictMode>
+  );
+
+  return {
+    hostElement,
+    root,
+  };
+}
+
+function initWidget(config: EmbedInitConfig = {}) {
+  const state = getOrCreateState();
+
+  if (!state || typeof document === "undefined") {
+    console.error("KritiBot: document is not available.");
+    return;
+  }
+
+  if (state.activeMount) {
+    state.activeMount.root.unmount();
+    state.activeMount.hostElement.remove();
+    state.activeMount = null;
+  }
+
+  state.currentConfig = { ...config };
+  state.activeMount = createMount(state.currentConfig);
+}
+
+function updateWidget(config: Partial<EmbedInitConfig>) {
+  const state = getOrCreateState();
+  if (!state) return;
+
+  if (!state.activeMount) {
+    initWidget(mergeConfig(state.scriptConfig, config));
+    return;
+  }
+
+  const nextConfig = mergeConfig(state.currentConfig, config);
+  initWidget(nextConfig);
+}
+
+function destroyWidget() {
+  const state = getOrCreateState();
+  if (!state?.activeMount) return;
+
+  state.activeMount.root.unmount();
+  state.activeMount.hostElement.remove();
+  state.activeMount = null;
+  state.currentConfig = {};
+  setChatRuntimeConfig();
+}
+
+function applyCurrentScriptConfig() {
+  const state = getOrCreateState();
+  if (!state || typeof document === "undefined") return;
+
+  const initialScript = document.currentScript as HTMLScriptElement | null;
+  state.scriptConfig = mergeConfig(
+    state.scriptConfig,
+    readScriptConfig(initialScript)
+  );
+}
+
+function normalizeQueuedCommands(value: unknown): KritiBotQueuedCommand[] {
+  if (!Array.isArray(value)) return [];
+
+  const commands: KritiBotQueuedCommand[] = [];
+
+  for (const entry of value) {
+    if (!Array.isArray(entry) || entry.length === 0) continue;
+
+    const [action, payload] = entry;
+
+    if (action === "init") {
+      commands.push(["init", toEmbedConfig(payload)]);
+      continue;
+    }
+
+    if (action === "update") {
+      const patch = toEmbedPatchConfig(payload);
+      if (patch) {
+        commands.push(["update", patch]);
+      }
+      continue;
+    }
+
+    if (action === "destroy") {
+      commands.push(["destroy"]);
+    }
+  }
+
+  return commands;
+}
+
+function bindGlobalApi():
+  | { api: KritiBotApi; queuedCommands: KritiBotQueuedCommand[] }
+  | null {
+  if (typeof window === "undefined") return null;
+
+  const existing =
+    window.KritiBot && typeof window.KritiBot === "object"
+      ? window.KritiBot
+      : undefined;
+  const queuedCommands = normalizeQueuedCommands(existing?.q);
+  const api = existing || ({} as KritiBotApi);
+
+  api.init = (config) => {
+    const state = getOrCreateState();
+    const defaults = state?.scriptConfig || {};
+    initWidget(mergeConfig(defaults, config || {}));
+  };
+  api.update = updateWidget;
+  api.destroy = destroyWidget;
+  api.version = __KRITIBOT_WIDGET_VERSION__;
+  api.apiVersion = API_VERSION;
+  api.q = [];
+
+  window.KritiBot = api;
+
+  return { api, queuedCommands };
+}
+
+function flushQueuedCommands(
+  api: KritiBotApi,
+  commands: KritiBotQueuedCommand[]
+) {
+  for (const command of commands) {
+    if (command[0] === "init") {
+      api.init(command[1]);
+      continue;
+    }
+
+    if (command[0] === "update") {
+      api.update(command[1]);
+      continue;
+    }
+
+    api.destroy();
+  }
+}
+
+function bootstrapEmbed() {
+  const state = getOrCreateState();
+  if (!state) return;
+
+  applyCurrentScriptConfig();
+
+  const binding = bindGlobalApi();
+  if (!binding) return;
+
+  if (
+    state.scriptConfig.autoInit !== false &&
+    binding.queuedCommands.length === 0 &&
+    !state.activeMount
+  ) {
+    initWidget(state.scriptConfig);
+  }
+
+  flushQueuedCommands(binding.api, binding.queuedCommands);
+}
+
+declare global {
+  interface Window {
+    KritiBot?: KritiBotApi;
+    __KRITIBOT_WIDGET_STATE__?: KritiBotGlobalState;
+  }
+}
+
+bootstrapEmbed();
+
+export type { EmbedInitConfig, KritiBotApi };
