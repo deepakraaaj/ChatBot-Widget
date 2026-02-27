@@ -10,6 +10,13 @@ import { ReactComponent as MicIcon } from "../icons/microphone.svg?react";
 import MessageBubble from "./MessageBubble";
 import QuickActions from "./QuickActions";
 
+const VOICE_ERROR_LABEL: Record<string, string> = {
+  "not-allowed": "Microphone access denied",
+  "no-speech": "No speech detected",
+  network: "Network error",
+  unknown: "Voice error",
+};
+
 const ChatWindow: React.FC = () => {
   const { messages, sendMessage, isStreaming, toggleChat } = useChat();
   const [input, setInput] = useState("");
@@ -80,13 +87,7 @@ const ChatWindow: React.FC = () => {
     }
   };
 
-  /* ------- voice error label ------- */
-  const voiceErrorLabel: Record<string, string> = {
-    "not-allowed": "Microphone access denied",
-    "no-speech": "No speech detected",
-    network: "Network error",
-    unknown: "Voice error",
-  };
+
 
   return (
     <div className="kriti-window-shadow kriti-chat-surface w-[420px] max-w-[calc(100vw-1rem)] h-[680px] max-h-[calc(100vh-5.5rem)] rounded-2xl sm:rounded-3xl flex flex-col overflow-hidden border border-slate-200/70 ring-1 ring-slate-900/5 animate-in slide-in-from-bottom-5 fade-in duration-300">
@@ -154,7 +155,7 @@ const ChatWindow: React.FC = () => {
       {voiceError && !isListening && (
         <div className="px-4 py-1.5 flex items-center gap-2 text-xs text-amber-700 bg-amber-50/80 border-t border-amber-100 animate-in fade-in duration-200">
           <span>⚠</span>
-          <span className="font-medium">{voiceErrorLabel[voiceError] ?? "Voice error"}</span>
+          <span className="font-medium">{VOICE_ERROR_LABEL[voiceError] ?? "Voice error"}</span>
         </div>
       )}
 
