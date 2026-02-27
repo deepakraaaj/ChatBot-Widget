@@ -2,9 +2,11 @@ import React, { useEffect, useRef, useState } from "react";
 import { twMerge } from "tailwind-merge";
 
 import { useChat } from "../hooks/useChat";
+import { useVoiceInput } from "../hooks/useVoiceInput";
 import { ChatMessage } from "../store/chatSlice";
 import { ReactComponent as CloseIcon } from "../icons/close.svg?react";
 import { ReactComponent as PaperPlaneIcon } from "../icons/paper-plane.svg?react";
+import { ReactComponent as MicIcon } from "../icons/microphone.svg?react";
 import MessageBubble from "./MessageBubble";
 import QuickActions from "./QuickActions";
 
@@ -12,17 +14,42 @@ const ChatWindow: React.FC = () => {
   const { messages, sendMessage, isStreaming, toggleChat } = useChat();
   const [input, setInput] = useState("");
 
+  const {
+    isSupported: isMicSupported,
+    isListening,
+    transcript,
+    error: voiceError,
+    startListening,
+    stopListening,
+    clearTranscript,
+  } = useVoiceInput();
+
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  /* ------- scroll to bottom when messages change ------- */
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isStreaming]);
+
+  /* ------- sync voice transcript into the textarea ------- */
+  useEffect(() => {
+    if (transcript) {
+      setInput(transcript);
+      // Auto-resize textarea to fit transcript
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+        textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+      }
+    }
+  }, [transcript]);
 
   const handleSend = (text?: string) => {
     const messageToSend = text || input;
     if (!messageToSend.trim()) return;
 
+    if (isListening) stopListening();
+    clearTranscript();
     sendMessage(messageToSend);
     setInput("");
     if (textareaRef.current) {
@@ -43,6 +70,24 @@ const ChatWindow: React.FC = () => {
     e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
   };
 
+  const handleMicToggle = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      clearTranscript();
+      setInput("");
+      startListening();
+    }
+  };
+
+  /* ------- voice error label ------- */
+  const voiceErrorLabel: Record<string, string> = {
+    "not-allowed": "Microphone access denied",
+    "no-speech": "No speech detected",
+    network: "Network error",
+    unknown: "Voice error",
+  };
+
   return (
     <div className="kriti-window-shadow kriti-chat-surface w-[420px] max-w-[calc(100vw-1rem)] h-[680px] max-h-[calc(100vh-5.5rem)] rounded-2xl sm:rounded-3xl flex flex-col overflow-hidden border border-slate-200/70 ring-1 ring-slate-900/5 animate-in slide-in-from-bottom-5 fade-in duration-300">
       <div className="kriti-header-gradient p-4 flex justify-between items-center shrink-0 z-10">
@@ -56,7 +101,7 @@ const ChatWindow: React.FC = () => {
             </p>
             <p className="inline-flex items-center gap-1.5 text-[11px] leading-none text-blue-100/95">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
-              Online  
+              Online
             </p>
           </div>
         </div>
@@ -96,6 +141,23 @@ const ChatWindow: React.FC = () => {
         <div ref={endRef} />
       </div>
 
+      {/* ------- Voice status bar ------- */}
+      {isListening && (
+        <div className="px-4 py-1.5 flex items-center gap-2 text-xs text-red-600 bg-red-50/80 border-t border-red-100 animate-in fade-in duration-200">
+          <span className="kriti-mic-pulse-dot" />
+          <span className="font-medium">Listening…</span>
+          <span className="text-red-400 ml-auto">Tap mic to stop</span>
+        </div>
+      )}
+
+      {/* ------- Voice error bar ------- */}
+      {voiceError && !isListening && (
+        <div className="px-4 py-1.5 flex items-center gap-2 text-xs text-amber-700 bg-amber-50/80 border-t border-amber-100 animate-in fade-in duration-200">
+          <span>⚠</span>
+          <span className="font-medium">{voiceErrorLabel[voiceError] ?? "Voice error"}</span>
+        </div>
+      )}
+
       <div className="p-3 bg-white/90 backdrop-blur-sm border-t border-slate-200 shrink-0">
         <div className="kriti-input-glow relative flex items-end gap-2 bg-white border border-slate-200 rounded-2xl px-3 py-2 focus-within:ring-2 focus-within:ring-brand-100 focus-within:border-brand-300 transition-all">
           <textarea
@@ -103,17 +165,38 @@ const ChatWindow: React.FC = () => {
             value={input}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
-            placeholder="Ask a question..."
+            placeholder={isListening ? "Speak now…" : "Ask a question..."}
             className="w-full bg-transparent border-none focus:ring-0 outline-none p-0 text-sm text-slate-700 placeholder-slate-400 resize-none max-h-32 min-h-[22px] py-1 pl-0.5 scrollbar-hide leading-normal"
             rows={1}
             style={{ minHeight: "22px" }}
           />
+
+          {/* ------- Mic button ------- */}
+          {isMicSupported && (
+            <button
+              onClick={handleMicToggle}
+              disabled={isStreaming}
+              aria-label={isListening ? "Stop voice input" : "Start voice input"}
+              className={twMerge(
+                "relative p-2 rounded-xl transition-all mb-px shrink-0",
+                isListening
+                  ? "kriti-mic-active text-white"
+                  : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700",
+                isStreaming && "cursor-not-allowed opacity-50"
+              )}
+            >
+              {isListening && <span className="kriti-mic-pulse-ring" />}
+              <MicIcon className="w-4 h-4 relative z-10" />
+            </button>
+          )}
+
+          {/* ------- Send button ------- */}
           <button
             onClick={() => handleSend()}
             disabled={!input.trim() || isStreaming}
             aria-label="Send message"
             className={twMerge(
-              "p-2 rounded-xl transition-all mb-[1px]",
+              "p-2 rounded-xl transition-all mb-px",
               input.trim() && !isStreaming
                 ? "bg-brand-600 text-white hover:bg-brand-700 shadow-[0_6px_14px_rgba(31,83,213,0.28)]"
                 : "bg-slate-200 text-slate-400 cursor-not-allowed"

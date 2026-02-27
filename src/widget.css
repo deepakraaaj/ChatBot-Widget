@@ -1,4 +1,4 @@
-@import "tailwindcss" source(none);
+@import "tailwindcss";
 @source "./components";
 
 @theme {
@@ -63,4 +63,42 @@
 
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* ---- Voice assistant ---- */
+
+.kriti-mic-active {
+  background: #ef4444;
+  box-shadow:
+    0 0 0 3px rgba(239, 68, 68, 0.18),
+    0 0 12px rgba(239, 68, 68, 0.30);
+}
+
+.kriti-mic-pulse-ring {
+  position: absolute;
+  inset: -4px;
+  border-radius: 0.75rem;
+  border: 2px solid rgba(239, 68, 68, 0.45);
+  animation: kriti-pulse-ring 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  pointer-events: none;
+}
+
+@keyframes kriti-pulse-ring {
+  0%   { transform: scale(1);   opacity: 0.7; }
+  70%  { transform: scale(1.35); opacity: 0; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+.kriti-mic-pulse-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: #ef4444;
+  animation: kriti-pulse-dot 1s ease-in-out infinite;
+}
+
+@keyframes kriti-pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.3; }
 }
