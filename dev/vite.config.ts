@@ -7,6 +7,8 @@ import svgr from "vite-plugin-svgr";
 const enableVoice = process.env.KRITIBOT_ENABLE_VOICE === "true";
 
 export default defineConfig({
+  root: resolve(process.cwd(), "dev"),
+  envDir: process.cwd(),
   resolve: {
     alias: {
       "@voice-input": resolve(

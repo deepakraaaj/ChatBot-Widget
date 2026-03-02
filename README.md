@@ -2,11 +2,13 @@
 
 Standalone embeddable chatbot widget for script-tag usage.
 
+Development-only support files now live under `dev/`, and release/support docs live under `docs/`.
+
 ## Checklists
 
-- [LIGHTWEIGHT_CHECKLIST.md](./LIGHTWEIGHT_CHECKLIST.md)
-- [PRODUCTION_CHECKLIST.md](./PRODUCTION_CHECKLIST.md)
-- [STAGING_SMOKE_TEST.md](./STAGING_SMOKE_TEST.md)
+- [docs/LIGHTWEIGHT_CHECKLIST.md](./docs/LIGHTWEIGHT_CHECKLIST.md)
+- [docs/PRODUCTION_CHECKLIST.md](./docs/PRODUCTION_CHECKLIST.md)
+- [docs/STAGING_SMOKE_TEST.md](./docs/STAGING_SMOKE_TEST.md)
 
 ## Build
 
@@ -45,7 +47,7 @@ The build now also enforces a default bundle budget of `275 kB` raw / `85 kB` gz
 After building, serve the `dist` folder:
 
 ```bash
-npx serve -l 8081 --config serve.json
+npx serve -l 8081 --config dev/serve.json
 ```
 
 Then access:
@@ -57,6 +59,12 @@ If you are iterating on source changes, rebuild continuously in a second termina
 
 ```bash
 npm run build:watch
+```
+
+For the local playground app:
+
+```bash
+npm run dev
 ```
 
 Notes:
