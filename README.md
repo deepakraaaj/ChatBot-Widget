@@ -2,6 +2,12 @@
 
 Standalone embeddable chatbot widget for script-tag usage.
 
+## Checklists
+
+- [LIGHTWEIGHT_CHECKLIST.md](./LIGHTWEIGHT_CHECKLIST.md)
+- [PRODUCTION_CHECKLIST.md](./PRODUCTION_CHECKLIST.md)
+- [STAGING_SMOKE_TEST.md](./STAGING_SMOKE_TEST.md)
+
 ## Build
 
 ```bash
@@ -9,10 +15,18 @@ npm install
 npm run build
 ```
 
+`npm run build` now runs a full TypeScript check before producing the embed bundle.
+
 Optional debug build with source maps:
 
 ```bash
 KRITIBOT_SOURCEMAP=true npm run build
+```
+
+Voice input is disabled in the default production build to keep the embed bundle smaller. Enable it explicitly when needed:
+
+```bash
+KRITIBOT_ENABLE_VOICE=true npm run build
 ```
 
 Output bundle:
@@ -21,6 +35,10 @@ Output bundle:
 - `dist/kritibot-widget.sri.json`
 
 `vite.embed.config.ts` now replaces `process.env.NODE_ENV` at build time, so the browser bundle does not depend on a global `process` object. Source maps are disabled by default in embed builds.
+
+The build now also enforces a default bundle budget of `275 kB` raw / `85 kB` gzip.
+
+`backendUrl` is required for a working chat session. If you load the script first and inject runtime config later, disable auto-init on the script tag and call `window.KritiBot.init(...)` yourself.
 
 ## Serve Dist Locally
 
@@ -73,6 +91,7 @@ The script exposes `window.KritiBot`:
 Backward compatibility:
 
 - `update(config)` is still available as an alias.
+- `update(config)` now rerenders the existing widget in place instead of recreating the host mount.
 
 Example:
 
@@ -146,4 +165,13 @@ Use a loader with retry + fallback CDN URLs:
     2
   );
 </script>
+```
+
+Use `data-auto-init="false"` when the script itself does not carry `data-backend-url`:
+
+```html
+<script
+  src="https://cdn-primary.example.com/kritibot-widget.js"
+  data-auto-init="false"
+></script>
 ```

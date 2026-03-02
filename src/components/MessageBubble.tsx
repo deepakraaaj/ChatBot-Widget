@@ -1,13 +1,13 @@
 import React, { useRef, useState } from "react";
-import { twMerge } from "tailwind-merge";
 
 import {
-  ChatMessage,
-  DataRow,
-  WorkflowOption,
-} from "../store/chatSlice";
+  type ChatMessage,
+  type DataRow,
+  type WorkflowOption,
+} from "../chat/chatState";
 import { ReactComponent as UserIcon } from "../icons/user-line.svg?react";
 import { ReactComponent as BoltIcon } from "../icons/bolt.svg?react";
+import { cn } from "../lib/cn";
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -15,6 +15,12 @@ interface MessageBubbleProps {
 }
 
 const numberedOptionRegex = /^\s*\d+[.)]\s+(.+?)\s*$/;
+
+function getFirstNonEmptyOptions(
+  ...sources: Array<WorkflowOption[] | undefined>
+): WorkflowOption[] {
+  return sources.find((source) => Array.isArray(source) && source.length > 0) || [];
+}
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({
   message,
@@ -46,13 +52,13 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const workflowView = message.metadata?.workflow?.view;
   const workflowUi = message.metadata?.workflow?.ui;
 
-  const options: WorkflowOption[] =
-    message.metadata?.clarification_options ||
-    workflowUi?.options ||
-    workflowView?.payload?.options ||
-    workflowView?.options ||
-    workflowView?.tasks ||
-    [];
+  const options = getFirstNonEmptyOptions(
+    message.metadata?.clarification_options,
+    workflowUi?.options,
+    workflowView?.payload?.options,
+    workflowView?.options,
+    workflowView?.tasks
+  );
 
   const numberedOptionsFromText = !isUser
     ? displayContent
@@ -85,7 +91,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const sqlData = message.metadata?.sql;
   const rows = sqlData?.rows_preview || [];
-  const totalCount = sqlData?.row_count || rows.length;
+  const totalCount =
+    typeof sqlData?.row_count === "number" ? sqlData.row_count : rows.length;
   const currentCount = rows.length;
   const hasTableData = rows.length > 0;
   const hasMore = currentCount < totalCount;
@@ -142,19 +149,19 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   return (
     <div
-      className={twMerge(
+      className={cn(
         "flex flex-col gap-2.5 mb-4 animate-in fade-in slide-in-from-bottom-2 duration-300",
         isUser ? "items-end" : "items-start"
       )}
     >
       <div
-        className={twMerge(
+        className={cn(
           "flex gap-3 max-w-[96%]",
           isUser ? "flex-row-reverse" : "flex-row"
         )}
       >
         <div
-          className={twMerge(
+          className={cn(
             "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border shadow-sm",
             isUser
               ? "bg-gradient-to-br from-brand-600 to-brand-700 border-brand-500 text-white"
@@ -171,7 +178,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
         <div className="flex flex-col gap-2 w-full max-w-full overflow-hidden">
           {textWithoutNumberedOptions && (
             <div
-              className={twMerge(
+              className={cn(
                 "py-2.5 px-3.5 rounded-2xl text-[13px] leading-relaxed shadow-sm border w-fit",
                 isUser
                   ? "bg-gradient-to-br from-brand-600 to-brand-700 text-white border-brand-500/70 rounded-tr-sm shadow-[0_2px_8px_rgba(25,71,184,0.16)]"
@@ -271,15 +278,17 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                 const label =
                   typeof option === "string"
                     ? option
-                    : option.label || option.name || JSON.stringify(option);
+                    : option.label ??
+                      option.name ??
+                      String(option.value ?? option.id ?? JSON.stringify(option));
                 const value =
                   typeof option === "string"
                     ? option
-                    : option.value || option.id || label;
+                    : option.value ?? option.id ?? label;
 
                 return (
                   <button
-                    key={idx}
+                    key={`${idx}-${String(value)}`}
                     onClick={() => handleOptionClick(String(value))}
                     className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-xs font-medium hover:bg-brand-50/70 hover:border-brand-200 hover:text-brand-700 transition-colors shadow-sm text-left"
                   >

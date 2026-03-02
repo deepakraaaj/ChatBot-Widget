@@ -1,8 +1,8 @@
 import React from "react";
-import { twMerge } from "tailwind-merge";
 
 import { useChat } from "../hooks/useChat";
 import { ReactComponent as ChatIcon } from "../icons/chat.svg?react";
+import { cn } from "../lib/cn";
 import ChatWindow from "./ChatWindow";
 
 const ChatWidget: React.FC = () => {
@@ -15,7 +15,7 @@ const ChatWidget: React.FC = () => {
       </div>
       <button
         onClick={toggleChat}
-        className={twMerge(
+        className={cn(
           "group relative overflow-hidden h-12 rounded-full border flex items-center justify-center transition-all duration-300 pointer-events-auto",
           isOpen
             ? "w-12 px-0 bg-white/95 text-slate-600 border-slate-200 hover:bg-white shadow-md"
@@ -23,13 +23,13 @@ const ChatWidget: React.FC = () => {
         )}
       >
         <div
-          className={twMerge(
+          className={cn(
             "flex items-center",
             isOpen ? "justify-center" : "gap-2.5 pr-0.5"
           )}
         >
           <ChatIcon
-            className={twMerge(
+            className={cn(
               "w-5 h-5 shrink-0 transition-transform duration-300",
               isOpen ? "rotate-90 scale-90" : "group-hover:translate-x-[1px]"
             )}

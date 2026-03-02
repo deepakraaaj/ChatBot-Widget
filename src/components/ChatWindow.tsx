@@ -1,14 +1,16 @@
 import React, { useEffect, useRef, useState } from "react";
-import { twMerge } from "tailwind-merge";
 
 import { useChat } from "../hooks/useChat";
-import { useVoiceInput } from "../hooks/useVoiceInput";
-import { ChatMessage } from "../store/chatSlice";
+import { useVoiceInput } from "@voice-input";
+import type { ChatMessage } from "../chat/chatState";
 import { ReactComponent as CloseIcon } from "../icons/close.svg?react";
 import { ReactComponent as PaperPlaneIcon } from "../icons/paper-plane.svg?react";
 import { ReactComponent as MicIcon } from "../icons/microphone.svg?react";
+import { cn } from "../lib/cn";
 import MessageBubble from "./MessageBubble";
 import QuickActions from "./QuickActions";
+
+declare const __KRITIBOT_ENABLE_VOICE__: boolean;
 
 const VOICE_ERROR_LABEL: Record<string, string> = {
   "not-allowed": "Microphone access denied",
@@ -31,12 +33,24 @@ const ChatWindow: React.FC = () => {
     clearTranscript,
   } = useVoiceInput();
 
+  const voiceEnabled = __KRITIBOT_ENABLE_VOICE__;
+  const canUseVoice = voiceEnabled && isMicSupported;
+
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   /* ------- scroll to bottom when messages change ------- */
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    const frame = window.requestAnimationFrame(() => {
+      endRef.current?.scrollIntoView({
+        behavior: isStreaming ? "auto" : "smooth",
+        block: "end",
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
   }, [messages, isStreaming]);
 
   /* ------- sync voice transcript into the textarea ------- */
@@ -55,8 +69,10 @@ const ChatWindow: React.FC = () => {
     const messageToSend = text || input;
     if (!messageToSend.trim()) return;
 
-    if (isListening) stopListening();
-    clearTranscript();
+    if (voiceEnabled) {
+      if (isListening) stopListening();
+      clearTranscript();
+    }
     sendMessage(messageToSend);
     setInput("");
     if (textareaRef.current) {
@@ -78,6 +94,8 @@ const ChatWindow: React.FC = () => {
   };
 
   const handleMicToggle = () => {
+    if (!voiceEnabled) return;
+
     if (isListening) {
       stopListening();
     } else {
@@ -86,9 +104,6 @@ const ChatWindow: React.FC = () => {
       startListening();
     }
   };
-
-
-
   return (
     <div className="kriti-window-shadow kriti-chat-surface w-[420px] max-w-[calc(100vw-1rem)] h-[680px] max-h-[calc(100vh-5.5rem)] rounded-2xl sm:rounded-3xl flex flex-col overflow-hidden border border-slate-200/70 ring-1 ring-slate-900/5 animate-in slide-in-from-bottom-5 fade-in duration-300">
       <div className="kriti-header-gradient p-4 flex justify-between items-center shrink-0 z-10">
@@ -143,7 +158,7 @@ const ChatWindow: React.FC = () => {
       </div>
 
       {/* ------- Voice status bar ------- */}
-      {isListening && (
+      {voiceEnabled && isListening && (
         <div className="px-4 py-1.5 flex items-center gap-2 text-xs text-red-600 bg-red-50/80 border-t border-red-100 animate-in fade-in duration-200">
           <span className="kriti-mic-pulse-dot" />
           <span className="font-medium">Listening…</span>
@@ -152,7 +167,7 @@ const ChatWindow: React.FC = () => {
       )}
 
       {/* ------- Voice error bar ------- */}
-      {voiceError && !isListening && (
+      {voiceEnabled && voiceError && !isListening && (
         <div className="px-4 py-1.5 flex items-center gap-2 text-xs text-amber-700 bg-amber-50/80 border-t border-amber-100 animate-in fade-in duration-200">
           <span>⚠</span>
           <span className="font-medium">{VOICE_ERROR_LABEL[voiceError] ?? "Voice error"}</span>
@@ -166,19 +181,19 @@ const ChatWindow: React.FC = () => {
             value={input}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
-            placeholder={isListening ? "Speak now…" : "Ask a question..."}
+            placeholder={voiceEnabled && isListening ? "Speak now..." : "Ask a question..."}
             className="w-full bg-transparent border-none focus:ring-0 outline-none p-0 text-sm text-slate-700 placeholder-slate-400 resize-none max-h-32 min-h-[22px] py-1 pl-0.5 scrollbar-hide leading-normal"
             rows={1}
             style={{ minHeight: "22px" }}
           />
 
           {/* ------- Mic button ------- */}
-          {isMicSupported && (
+          {canUseVoice && (
             <button
               onClick={handleMicToggle}
               disabled={isStreaming}
               aria-label={isListening ? "Stop voice input" : "Start voice input"}
-              className={twMerge(
+              className={cn(
                 "relative p-2 rounded-xl transition-all mb-px shrink-0",
                 isListening
                   ? "kriti-mic-active text-white"
@@ -196,7 +211,7 @@ const ChatWindow: React.FC = () => {
             onClick={() => handleSend()}
             disabled={!input.trim() || isStreaming}
             aria-label="Send message"
-            className={twMerge(
+            className={cn(
               "p-2 rounded-xl transition-all mb-px",
               input.trim() && !isStreaming
                 ? "bg-brand-600 text-white hover:bg-brand-700 shadow-[0_6px_14px_rgba(31,83,213,0.28)]"

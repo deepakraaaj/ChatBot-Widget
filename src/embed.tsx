@@ -1,15 +1,12 @@
 import { StrictMode } from "react";
 import { createRoot, Root } from "react-dom/client";
-import { Provider } from "react-redux";
 
 import ChatWidget from "./components/ChatWidget";
 import {
-  ChatRuntimeConfig,
-  ChatRuntimeContext,
+  ChatProvider,
   setChatRuntimeConfig,
 } from "./hooks/useChat";
-import { setIsOpen } from "./store/chatSlice";
-import { createWidgetStore } from "./store/widgetStore";
+import type { ChatRuntimeConfig, ChatRuntimeContext } from "./hooks/useChat";
 import widgetStyles from "./widget.css?inline";
 
 declare const __KRITIBOT_WIDGET_VERSION__: string;
@@ -44,7 +41,10 @@ interface KritiBotApi {
 
 interface WidgetMountRef {
   hostElement: HTMLDivElement;
+  targetElement: HTMLElement;
   root: Root;
+  render: (config: EmbedInitConfig) => void;
+  moveTo: (target: HTMLElement) => void;
 }
 
 interface KritiBotGlobalState {
@@ -59,6 +59,11 @@ const initialScriptTag =
   typeof document !== "undefined"
     ? (document.currentScript as HTMLScriptElement | null)
     : null;
+
+function normalizeString(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed || undefined;
+}
 
 function parseBoolean(value?: string): boolean | undefined {
   if (value === undefined) return undefined;
@@ -96,6 +101,18 @@ function parseHeaders(value?: string): Record<string, string> | undefined {
     );
     return undefined;
   }
+}
+
+function normalizeHeaderConfig(
+  value?: Record<string, string>
+): Record<string, string> | undefined {
+  if (!value) return undefined;
+
+  const entries = Object.entries(value).filter(
+    ([key, entryValue]) => key.trim() && typeof entryValue === "string"
+  );
+
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
 function isHTMLElement(target: EmbedTarget | undefined): target is HTMLElement {
@@ -153,6 +170,28 @@ function extractContext(config: EmbedInitConfig): ChatRuntimeContext | undefined
   return context;
 }
 
+function normalizeEmbedConfig(
+  config: Partial<EmbedInitConfig>
+): EmbedInitConfig {
+  return {
+    ...config,
+    target:
+      typeof config.target === "string"
+        ? normalizeString(config.target)
+        : config.target,
+    backendUrl: normalizeString(config.backendUrl),
+    userId: normalizeString(config.userId),
+    userName: normalizeString(config.userName),
+    companyId: normalizeString(config.companyId),
+    companyName: normalizeString(config.companyName),
+    requestHeaders: normalizeHeaderConfig(config.requestHeaders),
+  };
+}
+
+function hasBackendUrl(config: EmbedInitConfig): boolean {
+  return Boolean(normalizeString(config.backendUrl));
+}
+
 function toRuntimeConfig(config: EmbedInitConfig): ChatRuntimeConfig {
   return {
     backendUrl: config.backendUrl,
@@ -165,21 +204,26 @@ function mergeConfig(
   base: EmbedInitConfig,
   patch: Partial<EmbedInitConfig>
 ): EmbedInitConfig {
-  return {
+  const mergedHeaders =
+    patch.requestHeaders === undefined
+      ? base.requestHeaders
+      : {
+          ...(base.requestHeaders || {}),
+          ...(patch.requestHeaders || {}),
+        };
+
+  return normalizeEmbedConfig({
     ...base,
     ...patch,
-    requestHeaders: {
-      ...(base.requestHeaders || {}),
-      ...(patch.requestHeaders || {}),
-    },
-  };
+    requestHeaders: mergedHeaders,
+  });
 }
 
 function toEmbedConfig(value: unknown): EmbedInitConfig | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return undefined;
   }
-  return value as EmbedInitConfig;
+  return normalizeEmbedConfig(value as EmbedInitConfig);
 }
 
 function toEmbedPatchConfig(
@@ -188,7 +232,7 @@ function toEmbedPatchConfig(
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return undefined;
   }
-  return value as Partial<EmbedInitConfig>;
+  return normalizeEmbedConfig(value as Partial<EmbedInitConfig>);
 }
 
 function readScriptConfig(script: HTMLScriptElement | null): EmbedInitConfig {
@@ -206,7 +250,7 @@ function readScriptConfig(script: HTMLScriptElement | null): EmbedInitConfig {
     autoInit,
   } = script.dataset;
 
-  return {
+  return normalizeEmbedConfig({
     target: target?.trim() || undefined,
     backendUrl,
     userId,
@@ -216,7 +260,7 @@ function readScriptConfig(script: HTMLScriptElement | null): EmbedInitConfig {
     requestHeaders: parseHeaders(requestHeaders),
     openOnLoad: parseBoolean(openOnLoad),
     autoInit: parseBoolean(autoInit),
-  };
+  });
 }
 
 function getOrCreateState(): KritiBotGlobalState | null {
@@ -249,26 +293,39 @@ function createMount(config: EmbedInitConfig): WidgetMountRef {
   shadowRoot.appendChild(mountElement);
   target.appendChild(hostElement);
 
-  const store = createWidgetStore();
   const root = createRoot(mountElement);
+  const render = (nextConfig: EmbedInitConfig) => {
+    const runtimeConfig = toRuntimeConfig(nextConfig);
+    setChatRuntimeConfig(runtimeConfig);
 
-  setChatRuntimeConfig(toRuntimeConfig(config));
-  if (config.openOnLoad) {
-    store.dispatch(setIsOpen(true));
-  }
-
-  root.render(
-    <StrictMode>
-      <Provider store={store}>
-        <ChatWidget />
-      </Provider>
-    </StrictMode>
-  );
-
-  return {
-    hostElement,
-    root,
+    root.render(
+      <StrictMode>
+        <ChatProvider
+          initialIsOpen={Boolean(nextConfig.openOnLoad)}
+          runtimeConfig={runtimeConfig}
+        >
+          <ChatWidget />
+        </ChatProvider>
+      </StrictMode>
+    );
   };
+
+  const mountRef: WidgetMountRef = {
+    hostElement,
+    targetElement: target,
+    root,
+    render,
+    moveTo: (nextTarget) => {
+      if (mountRef.targetElement !== nextTarget) {
+        nextTarget.appendChild(hostElement);
+        mountRef.targetElement = nextTarget;
+      }
+    },
+  };
+
+  render(config);
+
+  return mountRef;
 }
 
 function initWidget(config: EmbedInitConfig = {}) {
@@ -285,7 +342,7 @@ function initWidget(config: EmbedInitConfig = {}) {
     state.activeMount = null;
   }
 
-  state.currentConfig = { ...config };
+  state.currentConfig = normalizeEmbedConfig(config);
   state.activeMount = createMount(state.currentConfig);
 }
 
@@ -299,7 +356,11 @@ function updateWidget(config: Partial<EmbedInitConfig>) {
   }
 
   const nextConfig = mergeConfig(state.currentConfig, config);
-  initWidget(nextConfig);
+  const nextTarget = resolveTarget(nextConfig.target);
+
+  state.activeMount.moveTo(nextTarget);
+  state.currentConfig = nextConfig;
+  state.activeMount.render(nextConfig);
 }
 
 function destroyWidget() {
@@ -369,7 +430,7 @@ function bindGlobalApi():
   api.init = (config) => {
     const state = getOrCreateState();
     const defaults = state?.scriptConfig || {};
-    initWidget(mergeConfig(defaults, config || {}));
+    initWidget(mergeConfig(defaults, normalizeEmbedConfig(config || {})));
   };
   api.update = updateWidget;
   api.destroy = destroyWidget;
@@ -413,9 +474,21 @@ function bootstrapEmbed() {
   if (
     state.scriptConfig.autoInit !== false &&
     binding.queuedCommands.length === 0 &&
-    !state.activeMount
+    !state.activeMount &&
+    hasBackendUrl(state.scriptConfig)
   ) {
     initWidget(state.scriptConfig);
+  }
+
+  if (
+    state.scriptConfig.autoInit !== false &&
+    binding.queuedCommands.length === 0 &&
+    !state.activeMount &&
+    !hasBackendUrl(state.scriptConfig)
+  ) {
+    console.warn(
+      "KritiBot: skipping auto-init because backendUrl is missing. Call KritiBot.init(...) once runtime config is available."
+    );
   }
 
   flushQueuedCommands(binding.api, binding.queuedCommands);
