@@ -6,7 +6,7 @@ import svgr from "vite-plugin-svgr";
 
 const packageVersion = process.env.npm_package_version || "0.0.0";
 const enableSourceMap = process.env.KRITIBOT_SOURCEMAP === "true";
-const enableVoice = process.env.KRITIBOT_ENABLE_VOICE === "true";
+const enableVoice = process.env.KRITIBOT_ENABLE_VOICE !== "false";
 
 export default defineConfig({
   publicDir: false,

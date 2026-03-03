@@ -62,21 +62,21 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const numberedOptionsFromText = !isUser
     ? displayContent
-        .split("\n")
-        .map((line) => {
-          const match = line.match(numberedOptionRegex);
-          return match ? match[1] : null;
-        })
-        .filter((item): item is string => Boolean(item))
+      .split("\n")
+      .map((line) => {
+        const match = line.match(numberedOptionRegex);
+        return match ? match[1] : null;
+      })
+      .filter((item): item is string => Boolean(item))
     : [];
 
   const textWithoutNumberedOptions =
     !isUser && numberedOptionsFromText.length > 0
       ? displayContent
-          .split("\n")
-          .filter((line) => !numberedOptionRegex.test(line))
-          .join("\n")
-          .trim()
+        .split("\n")
+        .filter((line) => !numberedOptionRegex.test(line))
+        .join("\n")
+        .trim()
       : displayContent;
 
   const effectiveOptions =
@@ -164,8 +164,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           className={cn(
             "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border shadow-sm",
             isUser
-              ? "bg-gradient-to-br from-brand-600 to-brand-700 border-brand-500 text-white"
-              : "bg-white/90 border-slate-200 text-brand-600"
+              ? "border-brand-200 text-brand-700"
+              : "border-slate-200 text-brand-600"
           )}
         >
           {isUser ? (
@@ -175,13 +175,13 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           )}
         </div>
 
-        <div className="flex flex-col gap-2 w-full max-w-full overflow-hidden">
+        <div className="flex flex-col gap-2 min-w-0 overflow-hidden">
           {textWithoutNumberedOptions && (
             <div
               className={cn(
                 "py-2.5 px-3.5 rounded-2xl text-[13px] leading-relaxed shadow-sm border w-fit",
                 isUser
-                  ? "bg-gradient-to-br from-brand-600 to-brand-700 text-white border-brand-500/70 rounded-tr-sm shadow-[0_2px_8px_rgba(25,71,184,0.16)]"
+                  ? "bg-brand-100 text-brand-700 border-brand-200 rounded-tr-sm shadow-[0_2px_8px_rgba(25,71,184,0.10)]"
                   : "bg-white text-slate-700 border-slate-200 rounded-tl-sm"
               )}
             >
@@ -237,6 +237,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
               {hasMore && (
                 <div className="border-t border-slate-200 px-3 py-2 bg-slate-50/70 flex justify-center">
                   <button
+                    type="button"
                     onClick={() =>
                       onOptionSelect?.(
                         `Show the next 15 records for the previous query. (Offset: ${currentCount})`
@@ -258,12 +259,12 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
           {(workflowUi?.title ||
             workflowView?.title ||
             workflowView?.payload?.title) && (
-            <div className="text-[11px] font-semibold text-slate-500 mb-0.5 uppercase tracking-[0.14em]">
-              {workflowUi?.title ||
-                workflowView?.title ||
-                workflowView?.payload?.title}
-            </div>
-          )}
+              <div className="text-[11px] font-semibold text-slate-500 mb-0.5 uppercase tracking-[0.14em]">
+                {workflowUi?.title ||
+                  workflowView?.title ||
+                  workflowView?.payload?.title}
+              </div>
+            )}
 
           {hasMoreOptions && (
             <div className="text-xs text-slate-500 mb-1">
@@ -271,7 +272,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
             </div>
           )}
 
-          <div className="flex flex-wrap gap-2">
+          <div className="kriti-option-group">
             {effectiveOptions
               .slice(0, showAll ? undefined : 6)
               .map((option, idx) => {
@@ -279,8 +280,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                   typeof option === "string"
                     ? option
                     : option.label ??
-                      option.name ??
-                      String(option.value ?? option.id ?? JSON.stringify(option));
+                    option.name ??
+                    String(option.value ?? option.id ?? JSON.stringify(option));
                 const value =
                   typeof option === "string"
                     ? option
@@ -288,9 +289,10 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
                 return (
                   <button
+                    type="button"
                     key={`${idx}-${String(value)}`}
                     onClick={() => handleOptionClick(String(value))}
-                    className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-xs font-medium hover:bg-brand-50/70 hover:border-brand-200 hover:text-brand-700 transition-colors shadow-sm text-left"
+                    className="kriti-option-chip"
                   >
                     {label}
                   </button>
@@ -299,8 +301,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
             {effectiveOptions.length > 6 && (
               <button
+                type="button"
                 onClick={() => setShowAll(!showAll)}
-                className="px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-500 rounded-lg text-xs font-medium hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                className="kriti-option-chip kriti-option-chip-muted"
               >
                 {showAll ? "Show Less" : `+${effectiveOptions.length - 6} More`}
               </button>
@@ -377,6 +380,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
               <div className="mt-2 flex gap-2">
                 <button
+                  type="button"
                   onClick={submitPendingValue}
                   disabled={!canApplyPending}
                   className="px-3 py-1.5 bg-brand-600 text-white rounded-md text-xs font-medium disabled:opacity-50 shadow-[0_4px_10px_rgba(31,83,213,0.24)]"
@@ -384,6 +388,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                   Apply
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     setPendingField("");
                     setPendingValue("");

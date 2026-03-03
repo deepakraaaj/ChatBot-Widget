@@ -6,10 +6,17 @@ import { cn } from "../lib/cn";
 import ChatWindow from "./ChatWindow";
 
 const ChatWidget: React.FC = () => {
-  const { isOpen, toggleChat } = useChat();
+  const { isOpen, toggleChat, connectionStatus } = useChat();
+
+  const statusDotClass =
+    connectionStatus === "online"
+      ? "bg-emerald-400 shadow-[0_0_0_4px_rgba(74,222,128,0.14)]"
+      : connectionStatus === "connecting"
+        ? "bg-amber-400 animate-pulse shadow-[0_0_0_4px_rgba(251,191,36,0.14)]"
+        : "bg-rose-400 shadow-[0_0_0_4px_rgba(251,113,133,0.14)]";
 
   return (
-    <div className="kriti-widget-root fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-[100] flex flex-col items-end gap-3 pointer-events-none">
+    <div className="kriti-widget-root fixed bottom-5 right-5 sm:bottom-6 sm:right-6 z-[2147483000] flex flex-col items-end gap-3 pointer-events-none">
       <div className="pointer-events-auto origin-bottom-right transition-all duration-300 ease-out">
         {isOpen && <ChatWindow />}
       </div>
@@ -39,7 +46,7 @@ const ChatWidget: React.FC = () => {
               <span className="text-sm leading-none font-semibold tracking-[0.01em]">
                 KritiBot
               </span>
-              <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_0_4px_rgba(74,222,128,0.14)]" />
+              <span className={cn("inline-block h-2 w-2 rounded-full", statusDotClass)} />
             </>
           )}
         </div>

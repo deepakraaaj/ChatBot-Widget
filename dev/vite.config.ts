@@ -4,7 +4,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import svgr from "vite-plugin-svgr";
 
-const enableVoice = process.env.KRITIBOT_ENABLE_VOICE === "true";
+const enableVoice = process.env.KRITIBOT_ENABLE_VOICE !== "false";
 
 export default defineConfig({
   root: resolve(process.cwd(), "dev"),

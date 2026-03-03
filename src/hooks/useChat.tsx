@@ -5,6 +5,7 @@ import {
   useEffect,
   useReducer,
   useRef,
+  useState,
 } from "react";
 import type { Dispatch, ReactNode } from "react";
 
@@ -39,6 +40,7 @@ interface ChatContextValue {
   isOpen: boolean;
   messages: ChatMessage[];
   isStreaming: boolean;
+  connectionStatus: ChatConnectionStatus;
   sendMessage: (message: string) => Promise<void>;
   startSession: () => Promise<string | null>;
   toggleChat: () => void;
@@ -47,6 +49,7 @@ interface ChatContextValue {
 }
 
 type AbortReason = "manual" | "timeout" | null;
+type ChatConnectionStatus = "online" | "connecting" | "offline";
 
 const STORAGE_USER_ID_KEY = "@STORAGE_USER_ID_KEY";
 const STORAGE_USER_COMPANY_ID_KEY = "@STORAGE_USER_COMPANY_ID_KEY";
@@ -70,6 +73,22 @@ let globalRuntimeConfig: ChatRuntimeConfig = {};
 function normalizeBackendUrl(value?: string): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed.replace(/\/+$/, "") : undefined;
+}
+
+function isBrowserOnline(): boolean {
+  if (typeof navigator === "undefined") {
+    return true;
+  }
+
+  return navigator.onLine;
+}
+
+function getInitialConnectionStatus(backendUrl?: string): ChatConnectionStatus {
+  if (!backendUrl) {
+    return "offline";
+  }
+
+  return isBrowserOnline() ? "connecting" : "offline";
 }
 
 function clearTimer(timerRef: { current: number | null }) {
@@ -196,9 +215,28 @@ function ChatProvider({
   );
   const backendUrl = activeRuntimeConfig.backendUrl;
   const requestHeaders = activeRuntimeConfig.requestHeaders;
+  const [connectionStatus, setConnectionStatus] =
+    useState<ChatConnectionStatus>(() => getInitialConnectionStatus(backendUrl));
 
   useEffect(() => {
     sessionIdRef.current = state.sessionId;
+  }, [state.sessionId]);
+
+  useEffect(() => {
+    if (!backendUrl || !isBrowserOnline()) {
+      setConnectionStatus("offline");
+      return;
+    }
+
+    setConnectionStatus((currentStatus) =>
+      currentStatus === "online" ? "online" : "connecting"
+    );
+  }, [backendUrl]);
+
+  useEffect(() => {
+    if (state.sessionId) {
+      setConnectionStatus("online");
+    }
   }, [state.sessionId]);
 
   const clearSessionRequest = useCallback(() => {
@@ -265,11 +303,18 @@ function ChatProvider({
 
   const startSession = useCallback(async () => {
     if (sessionIdRef.current) {
+      setConnectionStatus("online");
       return sessionIdRef.current;
     }
 
     if (!backendUrl) {
       console.error("KritiBot: backendUrl is not configured.");
+      setConnectionStatus("offline");
+      return null;
+    }
+
+    if (!isBrowserOnline()) {
+      setConnectionStatus("offline");
       return null;
     }
 
@@ -277,6 +322,7 @@ function ChatProvider({
       return sessionStartPromiseRef.current;
     }
 
+    setConnectionStatus("connecting");
     sessionAbortReasonRef.current = null;
 
     const pendingSession = (async () => {
@@ -315,6 +361,7 @@ function ChatProvider({
             payload: nextSessionId,
           });
           sessionIdRef.current = nextSessionId;
+          setConnectionStatus("online");
           return nextSessionId;
         }
       } catch (error) {
@@ -325,6 +372,7 @@ function ChatProvider({
 
         if (!isManualAbort) {
           console.error("Failed to start session", error);
+          setConnectionStatus("offline");
         }
 
         return null;
@@ -332,12 +380,44 @@ function ChatProvider({
         clearSessionRequest();
       }
 
+      setConnectionStatus("offline");
       return null;
     })();
 
     sessionStartPromiseRef.current = pendingSession;
     return pendingSession;
   }, [backendUrl, clearSessionRequest, getContext, requestHeaders]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleOffline = () => {
+      setConnectionStatus("offline");
+    };
+
+    const handleOnline = () => {
+      if (!backendUrl) {
+        setConnectionStatus("offline");
+        return;
+      }
+
+      setConnectionStatus((currentStatus) =>
+        currentStatus === "online" ? "online" : "connecting"
+      );
+
+      if (state.isOpen && !sessionIdRef.current) {
+        void startSession();
+      }
+    };
+
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
+
+    return () => {
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [backendUrl, startSession, state.isOpen]);
 
   const sendMessage = useCallback(
     async (message: string) => {
@@ -374,9 +454,19 @@ function ChatProvider({
 
         for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
           if (!backendUrl) {
+            setConnectionStatus("offline");
             dispatchChatAction(dispatch, {
               type: "appendToLastAssistantMessage",
               payload: MISSING_BACKEND_URL_MESSAGE,
+            });
+            return;
+          }
+
+          if (!isBrowserOnline()) {
+            setConnectionStatus("offline");
+            dispatchChatAction(dispatch, {
+              type: "appendToLastAssistantMessage",
+              payload: CONNECTION_ERROR_MESSAGE,
             });
             return;
           }
@@ -429,6 +519,8 @@ function ChatProvider({
                 `Server error: ${response.status} ${response.statusText}`
               );
             }
+
+            setConnectionStatus("online");
 
             if (!response.body) {
               throw new Error("No response body");
@@ -522,6 +614,7 @@ function ChatProvider({
             clearChatRequest();
 
             if (sessionExpired && attempt < maxRetries) {
+              setConnectionStatus("connecting");
               currentSessionId = null;
               sessionIdRef.current = null;
               dispatchChatAction(dispatch, {
@@ -545,6 +638,8 @@ function ChatProvider({
             if (isAbortError && chatAbortReasonRef.current === "manual") {
               return;
             }
+
+            setConnectionStatus("offline");
 
             dispatchChatAction(dispatch, {
               type: "appendToLastAssistantMessage",
@@ -604,6 +699,7 @@ function ChatProvider({
     isOpen: state.isOpen,
     messages: state.messages,
     isStreaming: state.isStreaming,
+    connectionStatus,
     sendMessage,
     startSession,
     toggleChat,
@@ -624,5 +720,11 @@ function useChat(): ChatContextValue {
   return context;
 }
 
-export type { ChatMessage, ChatResultPayload, ChatRuntimeConfig, ChatRuntimeContext };
+export type {
+  ChatConnectionStatus,
+  ChatMessage,
+  ChatResultPayload,
+  ChatRuntimeConfig,
+  ChatRuntimeContext,
+};
 export { ChatProvider, setChatRuntimeConfig, useChat };

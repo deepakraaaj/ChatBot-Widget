@@ -1,5 +1,13 @@
 # KritiBot Widget
 
+
+# Run Commands
+
+npm install
+npm run build
+npx serve -l 8081 --config dev/serve.json
+
+
 Standalone embeddable chatbot widget for script-tag usage.
 
 Development-only support files now live under `dev/`, and release/support docs live under `docs/`.
@@ -25,10 +33,10 @@ Optional debug build with source maps:
 KRITIBOT_SOURCEMAP=true npm run build
 ```
 
-Voice input is disabled in the default production build to keep the embed bundle smaller. Enable it explicitly when needed:
+Voice input is enabled by default. Disable it explicitly when needed:
 
 ```bash
-KRITIBOT_ENABLE_VOICE=true npm run build
+KRITIBOT_ENABLE_VOICE=false npm run build
 ```
 
 Output bundle:
@@ -40,7 +48,7 @@ Output bundle:
 
 The build now also enforces a default bundle budget of `275 kB` raw / `85 kB` gzip.
 
-`backendUrl` is required for a working chat session. If you load the script first and inject runtime config later, disable auto-init on the script tag and call `window.KritiBot.init(...)` yourself.
+`backendUrl` is required for a working chat session. If it is missing at load time, the widget now still mounts in offline mode and you can provide the URL later with `window.KritiBot.update({ backendUrl: "..." })` (or `init(...)` if you use `data-auto-init="false"`).
 
 ## Serve Dist Locally
 

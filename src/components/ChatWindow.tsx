@@ -20,7 +20,8 @@ const VOICE_ERROR_LABEL: Record<string, string> = {
 };
 
 const ChatWindow: React.FC = () => {
-  const { messages, sendMessage, isStreaming, toggleChat } = useChat();
+  const { messages, sendMessage, isStreaming, toggleChat, connectionStatus } =
+    useChat();
   const [input, setInput] = useState("");
 
   const {
@@ -35,6 +36,7 @@ const ChatWindow: React.FC = () => {
 
   const voiceEnabled = __KRITIBOT_ENABLE_VOICE__;
   const canUseVoice = voiceEnabled && isMicSupported;
+  const micDisabled = isStreaming || !canUseVoice;
 
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -94,7 +96,7 @@ const ChatWindow: React.FC = () => {
   };
 
   const handleMicToggle = () => {
-    if (!voiceEnabled) return;
+    if (!canUseVoice || isStreaming) return;
 
     if (isListening) {
       stopListening();
@@ -104,6 +106,21 @@ const ChatWindow: React.FC = () => {
       startListening();
     }
   };
+
+  const statusLabel =
+    connectionStatus === "online"
+      ? "Online"
+      : connectionStatus === "connecting"
+        ? "Connecting..."
+        : "Offline";
+
+  const statusDotClass =
+    connectionStatus === "online"
+      ? "bg-emerald-300"
+      : connectionStatus === "connecting"
+        ? "bg-amber-300 animate-pulse"
+        : "bg-rose-300";
+
   return (
     <div className="kriti-window-shadow kriti-chat-surface w-[420px] max-w-[calc(100vw-1rem)] h-[680px] max-h-[calc(100vh-5.5rem)] rounded-2xl sm:rounded-3xl flex flex-col overflow-hidden border border-slate-200/70 ring-1 ring-slate-900/5 animate-in slide-in-from-bottom-5 fade-in duration-300">
       <div className="kriti-header-gradient p-4 flex justify-between items-center shrink-0 z-10">
@@ -116,8 +133,8 @@ const ChatWindow: React.FC = () => {
               KritiBot
             </p>
             <p className="inline-flex items-center gap-1.5 text-[11px] leading-none text-blue-100/95">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
-              Online
+              <span className={cn("h-1.5 w-1.5 rounded-full", statusDotClass)} />
+              {statusLabel}
             </p>
           </div>
         </div>
@@ -188,17 +205,26 @@ const ChatWindow: React.FC = () => {
           />
 
           {/* ------- Mic button ------- */}
-          {canUseVoice && (
+          {voiceEnabled && (
             <button
               onClick={handleMicToggle}
-              disabled={isStreaming}
+              disabled={micDisabled}
               aria-label={isListening ? "Stop voice input" : "Start voice input"}
+              title={
+                !isMicSupported
+                  ? "Voice input not supported in this browser. Try Chrome/Edge on HTTPS."
+                  : isListening
+                    ? "Stop voice input"
+                    : "Start voice input"
+              }
               className={cn(
-                "relative p-2 rounded-xl transition-all mb-px shrink-0",
+                "relative p-2 rounded-xl transition-all mb-px shrink-0 border",
                 isListening
-                  ? "kriti-mic-active text-white"
-                  : "bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700",
-                isStreaming && "cursor-not-allowed opacity-50"
+                  ? "kriti-mic-active text-white border-red-500/70"
+                  : micDisabled
+                    ? "bg-slate-100 text-slate-300 border-slate-200 cursor-not-allowed"
+                    : "bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200 hover:text-slate-700",
+                isStreaming && "opacity-60"
               )}
             >
               {isListening && <span className="kriti-mic-pulse-ring" />}
@@ -221,6 +247,11 @@ const ChatWindow: React.FC = () => {
             <PaperPlaneIcon className="w-4 h-4" />
           </button>
         </div>
+        {voiceEnabled && !isMicSupported && (
+          <p className="mt-1.5 px-1 text-[11px] leading-4 text-amber-700/90">
+            Voice input is unavailable here. Use Chrome or Edge over HTTPS.
+          </p>
+        )}
       </div>
     </div>
   );

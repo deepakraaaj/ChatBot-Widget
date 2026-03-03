@@ -474,21 +474,15 @@ function bootstrapEmbed() {
   if (
     state.scriptConfig.autoInit !== false &&
     binding.queuedCommands.length === 0 &&
-    !state.activeMount &&
-    hasBackendUrl(state.scriptConfig)
+    !state.activeMount
   ) {
-    initWidget(state.scriptConfig);
-  }
+    if (!hasBackendUrl(state.scriptConfig)) {
+      console.warn(
+        "KritiBot: backendUrl is missing. Initializing in offline mode; call KritiBot.update({ backendUrl }) when config is available."
+      );
+    }
 
-  if (
-    state.scriptConfig.autoInit !== false &&
-    binding.queuedCommands.length === 0 &&
-    !state.activeMount &&
-    !hasBackendUrl(state.scriptConfig)
-  ) {
-    console.warn(
-      "KritiBot: skipping auto-init because backendUrl is missing. Call KritiBot.init(...) once runtime config is available."
-    );
+    initWidget(state.scriptConfig);
   }
 
   flushQueuedCommands(binding.api, binding.queuedCommands);
