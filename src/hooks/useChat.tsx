@@ -286,15 +286,21 @@ function ChatProvider({
   }, [cancelActiveRequest, cancelPendingSessionStart]);
 
   const getContext = useCallback(() => {
+    const rawCompanyId =
+      activeRuntimeConfig.context?.companyId ||
+      getStorageValue(STORAGE_USER_COMPANY_ID_KEY);
+    const companyId =
+      rawCompanyId && /^\d+$/.test(rawCompanyId)
+        ? Number(rawCompanyId)
+        : rawCompanyId;
+
     const context = {
       user_id:
         activeRuntimeConfig.context?.userId ||
         getStorageValue(STORAGE_USER_ID_KEY),
       user_name:
         activeRuntimeConfig.context?.userName || getStoredUserName() || "user",
-      company_id:
-        activeRuntimeConfig.context?.companyId ||
-        getStorageValue(STORAGE_USER_COMPANY_ID_KEY),
+      company_id: companyId,
       company_name: activeRuntimeConfig.context?.companyName || "the facility",
     };
 
@@ -500,7 +506,7 @@ function ChatProvider({
               controller.abort();
             }, 45000);
 
-            const response = await fetch(`${backendUrl}/chat`, {
+            const response = await fetch(`${backendUrl}/chat?stream=false`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
