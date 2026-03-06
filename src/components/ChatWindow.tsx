@@ -40,6 +40,7 @@ const ChatWindow: React.FC = () => {
 
   const endRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const previousIsListeningRef = useRef(isListening);
 
   /* ------- scroll to bottom when messages change ------- */
   useEffect(() => {
@@ -66,6 +67,40 @@ const ChatWindow: React.FC = () => {
       }
     }
   }, [transcript]);
+
+  /* ------- auto-send completed voice captures ------- */
+  useEffect(() => {
+    const wasListening = previousIsListeningRef.current;
+    previousIsListeningRef.current = isListening;
+
+    const spokenText = transcript.trim();
+    if (
+      !voiceEnabled ||
+      isStreaming ||
+      voiceError ||
+      !wasListening ||
+      isListening ||
+      !spokenText
+    ) {
+      return;
+    }
+
+    clearTranscript();
+    setInput("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+
+    sendMessage(spokenText);
+  }, [
+    clearTranscript,
+    isListening,
+    isStreaming,
+    sendMessage,
+    transcript,
+    voiceEnabled,
+    voiceError,
+  ]);
 
   const handleSend = (text?: string) => {
     const messageToSend = text || input;
