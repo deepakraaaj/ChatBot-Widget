@@ -50,6 +50,8 @@ The build now also enforces a default bundle budget of `275 kB` raw / `85 kB` gz
 
 `backendUrl` is required for a working chat session. If it is missing at load time, the widget now still mounts in offline mode and you can provide the URL later with `window.KritiBot.update({ backendUrl: "..." })` (or `init(...)` if you use `data-auto-init="false"`).
 
+Workflow option menus are single-use per step. After the conversation moves to the next message, older option buttons and inline workflow inputs become disabled so users cannot answer a stale prompt.
+
 ## Serve Dist Locally
 
 After building, serve the `dist` folder:

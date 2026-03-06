@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import {
   type ChatMessage,
@@ -12,6 +12,7 @@ import { cn } from "../lib/cn";
 interface MessageBubbleProps {
   message: ChatMessage;
   onOptionSelect?: (option: string) => void;
+  isDisabled?: boolean;
 }
 
 const numberedOptionRegex = /^\s*\d+[.)]\s+(.+?)\s*$/;
@@ -25,6 +26,7 @@ function getFirstNonEmptyOptions(
 const MessageBubble: React.FC<MessageBubbleProps> = ({
   message,
   onOptionSelect,
+  isDisabled = false,
 }) => {
   const isUser = message.role === "user";
   const [showAll, setShowAll] = useState(false);
@@ -118,7 +120,16 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const isDateField = pendingField.toLowerCase().includes("date");
   const canApplyPending = Boolean(pendingValue.trim());
 
+  useEffect(() => {
+    if (!isDisabled) return;
+
+    setPendingField("");
+    setPendingValue("");
+  }, [isDisabled]);
+
   const submitPendingValue = () => {
+    if (isDisabled) return;
+
     const field = pendingField.trim();
     const value = pendingValue.trim();
     if (!field || !value) return;
@@ -128,6 +139,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   };
 
   const handleOptionClick = (optionValue: string) => {
+    if (isDisabled) return;
+
     const raw = String(optionValue || "").trim();
     if (!raw) return;
 
@@ -238,12 +251,18 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                 <div className="border-t border-slate-200 px-3 py-2 bg-slate-50/70 flex justify-center">
                   <button
                     type="button"
+                    disabled={isDisabled}
                     onClick={() =>
                       onOptionSelect?.(
                         `Show the next 15 records for the previous query. (Offset: ${currentCount})`
                       )
                     }
-                    className="text-xs font-semibold text-brand-600 hover:text-brand-700 hover:underline transition-all"
+                    className={cn(
+                      "text-xs font-semibold transition-all",
+                      isDisabled
+                        ? "text-slate-400 cursor-not-allowed"
+                        : "text-brand-600 hover:text-brand-700 hover:underline"
+                    )}
                   >
                     Load More
                   </button>
@@ -291,6 +310,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                   <button
                     type="button"
                     key={`${idx}-${String(value)}`}
+                    disabled={isDisabled}
                     onClick={() => handleOptionClick(String(value))}
                     className="kriti-option-chip"
                   >
@@ -302,6 +322,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
             {effectiveOptions.length > 6 && (
               <button
                 type="button"
+                disabled={isDisabled}
                 onClick={() => setShowAll(!showAll)}
                 className="kriti-option-chip kriti-option-chip-muted"
               >
@@ -321,12 +342,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                   <input
                     ref={dateInputRef}
                     type="date"
+                    disabled={isDisabled}
                     value={pendingValue}
                     onChange={(e) => setPendingValue(e.target.value)}
                     className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-700 focus:border-brand-400 focus:outline-none"
                   />
                   <button
                     type="button"
+                    disabled={isDisabled}
                     onClick={() => {
                       const el = dateInputRef.current;
                       if (!el) return;
@@ -340,13 +363,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                         el.click();
                       }
                     }}
-                    className="px-2.5 py-1.5 bg-slate-100 text-slate-700 rounded-md text-xs font-medium border border-slate-300"
+                    className="px-2.5 py-1.5 bg-slate-100 text-slate-700 rounded-md text-xs font-medium border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Pick
                   </button>
                 </div>
               ) : pendingField.toLowerCase() === "status" ? (
                 <select
+                  disabled={isDisabled}
                   value={pendingValue}
                   onChange={(e) => setPendingValue(e.target.value)}
                   className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-700 focus:border-brand-400 focus:outline-none"
@@ -359,6 +383,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                 </select>
               ) : pendingField.toLowerCase() === "priority" ? (
                 <select
+                  disabled={isDisabled}
                   value={pendingValue}
                   onChange={(e) => setPendingValue(e.target.value)}
                   className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-700 focus:border-brand-400 focus:outline-none"
@@ -371,6 +396,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
               ) : (
                 <input
                   type="text"
+                  disabled={isDisabled}
                   value={pendingValue}
                   onChange={(e) => setPendingValue(e.target.value)}
                   placeholder={`Enter ${pendingField}`}
@@ -382,18 +408,19 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                 <button
                   type="button"
                   onClick={submitPendingValue}
-                  disabled={!canApplyPending}
+                  disabled={!canApplyPending || isDisabled}
                   className="px-3 py-1.5 bg-brand-600 text-white rounded-md text-xs font-medium disabled:opacity-50 shadow-[0_4px_10px_rgba(31,83,213,0.24)]"
                 >
                   Apply
                 </button>
                 <button
                   type="button"
+                  disabled={isDisabled}
                   onClick={() => {
                     setPendingField("");
                     setPendingValue("");
                   }}
-                  className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-md text-xs font-medium"
+                  className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-md text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>

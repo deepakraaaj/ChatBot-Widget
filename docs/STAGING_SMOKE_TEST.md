@@ -19,6 +19,7 @@ Run this on the real staging host page before production.
 - [ ] Open the widget and send a message.
 - [ ] Confirm `/session/start` and `/chat` succeed.
 - [ ] Confirm streamed or final assistant output renders correctly.
+- [ ] In a multi-step workflow, confirm only the latest option menu stays clickable and earlier menus become disabled after the next step appears.
 
 ## 3. In-Place Update
 

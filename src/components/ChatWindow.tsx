@@ -159,8 +159,13 @@ const ChatWindow: React.FC = () => {
             <QuickActions onAction={handleSend} />
           </div>
         ) : (
-          messages.map((m: ChatMessage) => (
-            <MessageBubble key={m.id} message={m} onOptionSelect={sendMessage} />
+          messages.map((m: ChatMessage, index) => (
+            <MessageBubble
+              key={m.id}
+              message={m}
+              onOptionSelect={sendMessage}
+              isDisabled={m.role === "assistant" && index < messages.length - 1}
+            />
           ))
         )}
 
