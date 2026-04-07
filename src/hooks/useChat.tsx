@@ -22,12 +22,16 @@ interface ChatRuntimeContext {
   userName?: string;
   companyId?: string;
   companyName?: string;
+  appId?: string;
+  appName?: string;
 }
 
 interface ChatRuntimeConfig {
   backendUrl?: string;
   context?: ChatRuntimeContext;
   requestHeaders?: Record<string, string>;
+  appId?: string;
+  appName?: string;
 }
 
 interface ChatProviderProps {
@@ -41,6 +45,8 @@ interface ChatContextValue {
   messages: ChatMessage[];
   isStreaming: boolean;
   connectionStatus: ChatConnectionStatus;
+  appId?: string;
+  appName?: string;
   sendMessage: (message: string) => Promise<void>;
   startSession: () => Promise<string | null>;
   toggleChat: () => void;
@@ -105,6 +111,8 @@ function setChatRuntimeConfig(config?: ChatRuntimeConfig) {
     requestHeaders: config?.requestHeaders
       ? { ...config.requestHeaders }
       : undefined,
+    appId: config?.appId?.trim() || undefined,
+    appName: config?.appName?.trim() || undefined,
   };
 }
 
@@ -117,6 +125,8 @@ function getNormalizedRuntimeConfig(
     requestHeaders: config?.requestHeaders
       ? { ...config.requestHeaders }
       : undefined,
+    appId: config?.appId?.trim() || undefined,
+    appName: config?.appName?.trim() || undefined,
   };
 }
 
@@ -215,8 +225,13 @@ function ChatProvider({
   );
   const backendUrl = activeRuntimeConfig.backendUrl;
   const requestHeaders = activeRuntimeConfig.requestHeaders;
+  const activeAppId = activeRuntimeConfig.appId;
+  const activeAppName = activeRuntimeConfig.appName;
+  const activeCompanyId = activeRuntimeConfig.context?.companyId?.trim();
   const [connectionStatus, setConnectionStatus] =
     useState<ChatConnectionStatus>(() => getInitialConnectionStatus(backendUrl));
+  const activeSessionScopeKey = `${backendUrl || ""}::${activeAppId || ""}::${activeCompanyId || ""}`;
+  const previousSessionScopeKeyRef = useRef<string>(activeSessionScopeKey);
 
   useEffect(() => {
     sessionIdRef.current = state.sessionId;
@@ -279,6 +294,27 @@ function ChatProvider({
   }, []);
 
   useEffect(() => {
+    const previousSessionScopeKey = previousSessionScopeKeyRef.current;
+    previousSessionScopeKeyRef.current = activeSessionScopeKey;
+    if (!previousSessionScopeKey || previousSessionScopeKey === activeSessionScopeKey) {
+      return;
+    }
+
+    cancelActiveRequest();
+    cancelPendingSessionStart();
+    sessionIdRef.current = null;
+    dispatchChatAction(dispatch, {
+      type: "clearChat",
+    });
+    setConnectionStatus(getInitialConnectionStatus(backendUrl));
+  }, [
+    activeSessionScopeKey,
+    backendUrl,
+    cancelActiveRequest,
+    cancelPendingSessionStart,
+  ]);
+
+  useEffect(() => {
     return () => {
       cancelActiveRequest();
       cancelPendingSessionStart();
@@ -302,6 +338,8 @@ function ChatProvider({
         activeRuntimeConfig.context?.userName || getStoredUserName() || "user",
       company_id: companyId,
       company_name: activeRuntimeConfig.context?.companyName || "the facility",
+      app_id: activeRuntimeConfig.appId || activeRuntimeConfig.context?.appId,
+      app_name: activeRuntimeConfig.appName || activeRuntimeConfig.context?.appName,
     };
 
     return encodeBase64Utf8(JSON.stringify(context));
@@ -347,6 +385,7 @@ function ChatProvider({
             "Content-Type": "application/json",
             ...(requestHeaders || {}),
             "x-user-context": contextB64,
+            ...(activeAppId ? { "x-app-id": activeAppId } : {}),
           },
           signal: controller.signal,
         });
@@ -392,7 +431,7 @@ function ChatProvider({
 
     sessionStartPromiseRef.current = pendingSession;
     return pendingSession;
-  }, [backendUrl, clearSessionRequest, getContext, requestHeaders]);
+  }, [activeAppId, backendUrl, clearSessionRequest, getContext, requestHeaders]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -512,6 +551,7 @@ function ChatProvider({
                 "Content-Type": "application/json",
                 ...(requestHeaders || {}),
                 "x-user-context": contextB64,
+                ...(activeAppId ? { "x-app-id": activeAppId } : {}),
               },
               signal: controller.signal,
               body: JSON.stringify({
@@ -527,17 +567,6 @@ function ChatProvider({
             }
 
             setConnectionStatus("online");
-
-            if (!response.body) {
-              throw new Error("No response body");
-            }
-
-            const reader = response.body.getReader();
-            readerRef.current = reader;
-            const decoder = new TextDecoder();
-            let buffer = "";
-            let sessionExpired = false;
-            let surfacedSystemError = false;
 
             const handlePayload = (payload: Record<string, unknown>) => {
               const payloadType = String(payload.type || "");
@@ -587,35 +616,11 @@ function ChatProvider({
                 });
               }
             };
+            let sessionExpired = false;
+            let surfacedSystemError = false;
+            readerRef.current = null;
 
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-
-              const chunk = decoder.decode(value, { stream: true });
-              buffer += chunk;
-
-              const lines = buffer.split("\n");
-              buffer = lines.pop() || "";
-
-              for (const line of lines) {
-                if (!line.trim()) continue;
-
-                try {
-                  handlePayload(JSON.parse(line) as Record<string, unknown>);
-                } catch (error) {
-                  console.error("Error parsing JSON chunk", error);
-                }
-              }
-            }
-
-            if (buffer.trim()) {
-              try {
-                handlePayload(JSON.parse(buffer) as Record<string, unknown>);
-              } catch (error) {
-                console.error("Error parsing trailing JSON chunk", error);
-              }
-            }
+            handlePayload((await response.json()) as Record<string, unknown>);
 
             clearChatRequest();
 
@@ -665,7 +670,15 @@ function ChatProvider({
         });
       }
     },
-    [backendUrl, clearChatRequest, getContext, requestHeaders, startSession, state.isStreaming]
+    [
+      activeAppId,
+      backendUrl,
+      clearChatRequest,
+      getContext,
+      requestHeaders,
+      startSession,
+      state.isStreaming,
+    ]
   );
 
   const toggleChat = useCallback(() => {
@@ -706,6 +719,8 @@ function ChatProvider({
     messages: state.messages,
     isStreaming: state.isStreaming,
     connectionStatus,
+    appId: activeAppId,
+    appName: activeAppName,
     sendMessage,
     startSession,
     toggleChat,

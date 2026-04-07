@@ -20,7 +20,14 @@ const VOICE_ERROR_LABEL: Record<string, string> = {
 };
 
 const ChatWindow: React.FC = () => {
-  const { messages, sendMessage, isStreaming, toggleChat, connectionStatus } =
+  const {
+    messages,
+    sendMessage,
+    isStreaming,
+    toggleChat,
+    connectionStatus,
+    appName,
+  } =
     useChat();
   const [input, setInput] = useState("");
 
@@ -169,7 +176,7 @@ const ChatWindow: React.FC = () => {
             </p>
             <p className="inline-flex items-center gap-1.5 text-[11px] leading-none text-blue-100/95">
               <span className={cn("h-1.5 w-1.5 rounded-full", statusDotClass)} />
-              {statusLabel}
+              {appName ? `${appName} • ${statusLabel}` : statusLabel}
             </p>
           </div>
         </div>
@@ -188,7 +195,9 @@ const ChatWindow: React.FC = () => {
             <div className="mb-5 px-1">
               <h3 className="text-xl font-semibold text-slate-900 mb-1">How can I help?</h3>
               <p className="text-slate-500 text-sm leading-relaxed">
-                Ask about tasks, status updates, or recent activity.
+                {appName
+                  ? `Ask about ${appName} data, status, or recent activity.`
+                  : "Ask about tasks, status updates, or recent activity."}
               </p>
             </div>
             <QuickActions onAction={handleSend} />

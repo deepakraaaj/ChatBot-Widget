@@ -16,6 +16,8 @@ type EmbedTarget = string | HTMLElement;
 interface EmbedInitConfig {
   target?: EmbedTarget;
   backendUrl?: string;
+  appId?: string;
+  appName?: string;
   userId?: string;
   userName?: string;
   companyId?: string;
@@ -152,6 +154,8 @@ function resolveTarget(target: EmbedTarget | undefined): HTMLElement {
 
 function extractContext(config: EmbedInitConfig): ChatRuntimeContext | undefined {
   const context: ChatRuntimeContext = {
+    appId: config.appId,
+    appName: config.appName,
     userId: config.userId,
     userName: config.userName,
     companyId: config.companyId,
@@ -162,7 +166,9 @@ function extractContext(config: EmbedInitConfig): ChatRuntimeContext | undefined
     !context.userId &&
     !context.userName &&
     !context.companyId &&
-    !context.companyName
+    !context.companyName &&
+    !context.appId &&
+    !context.appName
   ) {
     return undefined;
   }
@@ -180,6 +186,8 @@ function normalizeEmbedConfig(
         ? normalizeString(config.target)
         : config.target,
     backendUrl: normalizeString(config.backendUrl),
+    appId: normalizeString(config.appId),
+    appName: normalizeString(config.appName),
     userId: normalizeString(config.userId),
     userName: normalizeString(config.userName),
     companyId: normalizeString(config.companyId),
@@ -197,6 +205,8 @@ function toRuntimeConfig(config: EmbedInitConfig): ChatRuntimeConfig {
     backendUrl: config.backendUrl,
     context: extractContext(config),
     requestHeaders: config.requestHeaders,
+    appId: config.appId,
+    appName: config.appName,
   };
 }
 
@@ -241,6 +251,8 @@ function readScriptConfig(script: HTMLScriptElement | null): EmbedInitConfig {
   const {
     target,
     backendUrl,
+    appId,
+    appName,
     userId,
     userName,
     companyId,
@@ -253,6 +265,8 @@ function readScriptConfig(script: HTMLScriptElement | null): EmbedInitConfig {
   return normalizeEmbedConfig({
     target: target?.trim() || undefined,
     backendUrl,
+    appId,
+    appName,
     userId,
     userName,
     companyId,
