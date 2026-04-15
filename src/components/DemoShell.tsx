@@ -25,6 +25,9 @@ interface DemoCompanySummary {
   is_active?: boolean | null;
 }
 
+const STARTUP_RETRY_DELAYS_MS = [1500, 3000, 5000, 8000];
+const RETRYABLE_BACKEND_STATUS_CODES = new Set([502, 503, 504]);
+
 const SAMPLE_PROMPTS: Record<string, string[]> = {
   fits_dev_march_9: [
     "show tasks status=0",
@@ -42,6 +45,71 @@ const SAMPLE_PROMPTS: Record<string, string[]> = {
     "show purchase orders",
   ],
 };
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException("The operation was aborted.", "AbortError"));
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      signal.removeEventListener("abort", handleAbort);
+      resolve();
+    }, delayMs);
+
+    const handleAbort = () => {
+      window.clearTimeout(timeoutId);
+      reject(new DOMException("The operation was aborted.", "AbortError"));
+    };
+
+    signal.addEventListener("abort", handleAbort, { once: true });
+  });
+}
+
+async function fetchJsonWithStartupRetries<T>({
+  url,
+  signal,
+  onRetry,
+}: {
+  url: string;
+  signal: AbortSignal;
+  onRetry?: (attemptNumber: number, delayMs: number) => void;
+}): Promise<T> {
+  for (let attemptIndex = 0; ; attemptIndex += 1) {
+    let response: Response;
+    try {
+      response = await fetch(url, { signal });
+    } catch (error) {
+      if (isAbortError(error) || attemptIndex >= STARTUP_RETRY_DELAYS_MS.length) {
+        throw error;
+      }
+      const delayMs = STARTUP_RETRY_DELAYS_MS[attemptIndex];
+      onRetry?.(attemptIndex + 1, delayMs);
+      await waitForRetry(delayMs, signal);
+      continue;
+    }
+
+    if (response.ok) {
+      return (await response.json()) as T;
+    }
+
+    if (
+      !RETRYABLE_BACKEND_STATUS_CODES.has(response.status) ||
+      attemptIndex >= STARTUP_RETRY_DELAYS_MS.length
+    ) {
+      throw new Error(`Request failed (${response.status})`);
+    }
+
+    const delayMs = STARTUP_RETRY_DELAYS_MS[attemptIndex];
+    onRetry?.(attemptIndex + 1, delayMs);
+    await waitForRetry(delayMs, signal);
+  }
+}
 
 function formatCompanyLabel(company: DemoCompanySummary): string {
   const name = String(company.company_name || "").trim();
@@ -259,16 +327,18 @@ export default function DemoShell({ backendUrl }: DemoShellProps) {
       setLoadingApps(true);
       setErrorMessage("");
       try {
-        const response = await fetch(`${backendUrl}/apps`, {
-          signal: controller.signal,
-        });
-        if (!response.ok) {
-          throw new Error(`Failed to load apps (${response.status})`);
-        }
-        const payload = (await response.json()) as {
+        const payload = await fetchJsonWithStartupRetries<{
           apps?: DemoAppSummary[];
           default_app_id?: string | null;
-        };
+        }>({
+          url: `${backendUrl}/apps`,
+          signal: controller.signal,
+          onRetry: (attemptNumber) => {
+            setErrorMessage(
+              `Backend is starting. Retrying app list (${attemptNumber}/${STARTUP_RETRY_DELAYS_MS.length})...`
+            );
+          },
+        });
         const nextApps = Array.isArray(payload.apps) ? payload.apps : [];
         const nextAppId =
           String(payload.default_app_id || "").trim() ||
@@ -282,6 +352,8 @@ export default function DemoShell({ backendUrl }: DemoShellProps) {
           return;
         }
         console.error("Failed to load demo apps", error);
+        setApps([]);
+        setSelectedAppId("");
         setErrorMessage("Unable to load applications from the backend.");
       } finally {
         if (!controller.signal.aborted) {
@@ -306,17 +378,18 @@ export default function DemoShell({ backendUrl }: DemoShellProps) {
       setLoadingCompanies(true);
       setErrorMessage("");
       try {
-        const response = await fetch(
-          `${backendUrl}/apps/${encodeURIComponent(selectedAppId)}/companies?limit=250`,
-          { signal: controller.signal }
-        );
-        if (!response.ok) {
-          throw new Error(`Failed to load companies (${response.status})`);
-        }
-        const payload = (await response.json()) as {
+        const payload = await fetchJsonWithStartupRetries<{
           companies?: DemoCompanySummary[];
           default_company_id?: string | null;
-        };
+        }>({
+          url: `${backendUrl}/apps/${encodeURIComponent(selectedAppId)}/companies?limit=250`,
+          signal: controller.signal,
+          onRetry: (attemptNumber) => {
+            setErrorMessage(
+              `Backend is starting. Retrying company list (${attemptNumber}/${STARTUP_RETRY_DELAYS_MS.length})...`
+            );
+          },
+        });
         const nextCompanies = Array.isArray(payload.companies)
           ? payload.companies
           : [];

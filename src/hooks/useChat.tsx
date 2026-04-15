@@ -71,6 +71,9 @@ const START_SESSION_ERROR_MESSAGE =
   "\n[I'm having trouble connecting to the server. Please try again later.]";
 const MISSING_BACKEND_URL_MESSAGE =
   "\n[KritiBot is not configured yet. Missing backend URL.]";
+const SESSION_START_TIMEOUT_MS = 30000;
+const CHAT_REQUEST_TIMEOUT_MS = 90000;
+const HEALTH_CHECK_TIMEOUT_MS = 5000;
 
 const ChatContext = createContext<ChatContextValue | null>(null);
 
@@ -345,6 +348,38 @@ function ChatProvider({
     return encodeBase64Utf8(JSON.stringify(context));
   }, [activeRuntimeConfig.context]);
 
+  const refreshConnectionStatus = useCallback(async () => {
+    if (!backendUrl || !isBrowserOnline()) {
+      setConnectionStatus("offline");
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      controller.abort();
+    }, HEALTH_CHECK_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(`${backendUrl}/health`, {
+        method: "GET",
+        headers: {
+          ...(requestHeaders || {}),
+          ...(activeAppId ? { "x-app-id": activeAppId } : {}),
+        },
+        cache: "no-store",
+        signal: controller.signal,
+      });
+
+      setConnectionStatus(response.ok ? "online" : "connecting");
+    } catch (error) {
+      const isAbortError =
+        error instanceof DOMException && error.name === "AbortError";
+      setConnectionStatus(isAbortError ? "connecting" : "offline");
+    } finally {
+      window.clearTimeout(timer);
+    }
+  }, [activeAppId, backendUrl, requestHeaders]);
+
   const startSession = useCallback(async () => {
     if (sessionIdRef.current) {
       setConnectionStatus("online");
@@ -375,7 +410,7 @@ function ChatProvider({
       sessionTimeoutRef.current = window.setTimeout(() => {
         sessionAbortReasonRef.current = "timeout";
         controller.abort();
-      }, 15000);
+      }, SESSION_START_TIMEOUT_MS);
 
       try {
         const contextB64 = getContext();
@@ -417,7 +452,8 @@ function ChatProvider({
 
         if (!isManualAbort) {
           console.error("Failed to start session", error);
-          setConnectionStatus("offline");
+          setConnectionStatus(getInitialConnectionStatus(backendUrl));
+          void refreshConnectionStatus();
         }
 
         return null;
@@ -425,13 +461,21 @@ function ChatProvider({
         clearSessionRequest();
       }
 
-      setConnectionStatus("offline");
+      setConnectionStatus(getInitialConnectionStatus(backendUrl));
+      void refreshConnectionStatus();
       return null;
     })();
 
     sessionStartPromiseRef.current = pendingSession;
     return pendingSession;
-  }, [activeAppId, backendUrl, clearSessionRequest, getContext, requestHeaders]);
+  }, [
+    activeAppId,
+    backendUrl,
+    clearSessionRequest,
+    getContext,
+    refreshConnectionStatus,
+    requestHeaders,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -543,7 +587,7 @@ function ChatProvider({
             chatTimeoutRef.current = window.setTimeout(() => {
               chatAbortReasonRef.current = "timeout";
               controller.abort();
-            }, 45000);
+            }, CHAT_REQUEST_TIMEOUT_MS);
 
             const response = await fetch(`${backendUrl}/chat?stream=false`, {
               method: "POST",
@@ -650,7 +694,8 @@ function ChatProvider({
               return;
             }
 
-            setConnectionStatus("offline");
+            setConnectionStatus(getInitialConnectionStatus(backendUrl));
+            void refreshConnectionStatus();
 
             dispatchChatAction(dispatch, {
               type: "appendToLastAssistantMessage",
@@ -675,6 +720,7 @@ function ChatProvider({
       backendUrl,
       clearChatRequest,
       getContext,
+      refreshConnectionStatus,
       requestHeaders,
       startSession,
       state.isStreaming,
