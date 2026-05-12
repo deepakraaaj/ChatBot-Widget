@@ -32,7 +32,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   const [showAll, setShowAll] = useState(false);
   const [pendingField, setPendingField] = useState<string>("");
   const [pendingValue, setPendingValue] = useState<string>("");
-  const dateInputRef = useRef<HTMLInputElement | null>(null);
+  const [workflowInputValue, setWorkflowInputValue] = useState<string>("");
+  const pendingDateInputRef = useRef<HTMLInputElement | null>(null);
+  const workflowDateInputRef = useRef<HTMLInputElement | null>(null);
 
   const normalizeAssistantError = (content: string): string => {
     const text = String(content || "");
@@ -53,6 +55,13 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const workflowView = message.metadata?.workflow?.view;
   const workflowUi = message.metadata?.workflow?.ui;
+  const workflowField = workflowUi?.field;
+  const workflowActions = Array.isArray(workflowUi?.actions)
+    ? workflowUi.actions
+    : [];
+  const workflowInputKind = String(workflowField?.kind || "text").toLowerCase();
+  const isWorkflowInput = workflowUi?.type === "input" && Boolean(workflowField?.id);
+  const canSkipWorkflowField = workflowActions.includes("skip");
 
   const options = getFirstNonEmptyOptions(
     message.metadata?.clarification_options,
@@ -119,13 +128,19 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const isDateField = pendingField.toLowerCase().includes("date");
   const canApplyPending = Boolean(pendingValue.trim());
+  const canApplyWorkflowInput = Boolean(workflowInputValue.trim());
 
   useEffect(() => {
     if (!isDisabled) return;
 
     setPendingField("");
     setPendingValue("");
+    setWorkflowInputValue("");
   }, [isDisabled]);
+
+  useEffect(() => {
+    setWorkflowInputValue("");
+  }, [message.id, workflowField?.id]);
 
   const submitPendingValue = () => {
     if (isDisabled) return;
@@ -158,6 +173,25 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
     setPendingField("");
     setPendingValue("");
     onOptionSelect?.(raw);
+  };
+
+  const submitWorkflowInput = () => {
+    if (isDisabled) return;
+    const value = workflowInputValue.trim();
+    if (!value) return;
+    onOptionSelect?.(value);
+    setWorkflowInputValue("");
+  };
+
+  const openDatePicker = (input: HTMLInputElement | null) => {
+    if (!input) return;
+    const picker = (input as HTMLInputElement & { showPicker?: () => void }).showPicker;
+    if (typeof picker === "function") {
+      picker.call(input);
+      return;
+    }
+    input.focus();
+    input.click();
   };
 
   return (
@@ -319,6 +353,17 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                 );
               })}
 
+            {workflowUi?.type === "menu" && canSkipWorkflowField && (
+              <button
+                type="button"
+                disabled={isDisabled}
+                onClick={() => onOptionSelect?.("skip")}
+                className="kriti-option-chip kriti-option-chip-muted"
+              >
+                Skip
+              </button>
+            )}
+
             {effectiveOptions.length > 6 && (
               <button
                 type="button"
@@ -340,7 +385,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
               {isDateField ? (
                 <div className="flex gap-2 items-center">
                   <input
-                    ref={dateInputRef}
+                    ref={pendingDateInputRef}
                     type="date"
                     disabled={isDisabled}
                     value={pendingValue}
@@ -350,19 +395,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                   <button
                     type="button"
                     disabled={isDisabled}
-                    onClick={() => {
-                      const el = dateInputRef.current;
-                      if (!el) return;
-                      const picker = (
-                        el as HTMLInputElement & { showPicker?: () => void }
-                      ).showPicker;
-                      if (typeof picker === "function") {
-                        picker.call(el);
-                      } else {
-                        el.focus();
-                        el.click();
-                      }
-                    }}
+                    onClick={() => openDatePicker(pendingDateInputRef.current)}
                     className="px-2.5 py-1.5 bg-slate-100 text-slate-700 rounded-md text-xs font-medium border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Pick
@@ -424,6 +457,68 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
                 >
                   Cancel
                 </button>
+              </div>
+            </div>
+          )}
+
+          {isWorkflowInput && workflowField && (
+            <div className="mt-2 w-full max-w-md bg-white border border-slate-200 rounded-lg p-3 shadow-sm">
+              <div className="text-xs font-semibold text-slate-600 mb-2">
+                {workflowField.label || workflowField.id}
+              </div>
+
+              {workflowInputKind === "date" ? (
+                <div className="flex gap-2 items-center">
+                  <input
+                    ref={workflowDateInputRef}
+                    type="date"
+                    disabled={isDisabled}
+                    value={workflowInputValue}
+                    onChange={(e) => setWorkflowInputValue(e.target.value)}
+                    className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-700 focus:border-brand-400 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    disabled={isDisabled}
+                    onClick={() => openDatePicker(workflowDateInputRef.current)}
+                    className="px-2.5 py-1.5 bg-slate-100 text-slate-700 rounded-md text-xs font-medium border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Pick
+                  </button>
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  disabled={isDisabled}
+                  value={workflowInputValue}
+                  onChange={(e) => setWorkflowInputValue(e.target.value)}
+                  placeholder={workflowField.description || `Enter ${workflowField.label || workflowField.id}`}
+                  className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-700 focus:border-brand-400 focus:outline-none"
+                />
+              )}
+
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={submitWorkflowInput}
+                  disabled={!canApplyWorkflowInput || isDisabled}
+                  className="px-3 py-1.5 bg-brand-600 text-white rounded-md text-xs font-medium disabled:opacity-50 shadow-[0_4px_10px_rgba(31,83,213,0.24)]"
+                >
+                  Apply
+                </button>
+                {canSkipWorkflowField && (
+                  <button
+                    type="button"
+                    disabled={isDisabled}
+                    onClick={() => {
+                      setWorkflowInputValue("");
+                      onOptionSelect?.("skip");
+                    }}
+                    className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-md text-xs font-medium border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Skip
+                  </button>
+                )}
               </div>
             </div>
           )}

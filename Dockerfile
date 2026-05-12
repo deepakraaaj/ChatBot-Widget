@@ -1,16 +1,19 @@
 FROM node:20-alpine AS builder
 
+# Install pnpm
+RUN npm install -g pnpm
+
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-RUN npm ci
+COPY package.json pnpm-lock.yaml* ./
+RUN pnpm install --frozen-lockfile || pnpm install
 
 COPY . .
 
 ARG VITE_AI_BACKEND_URL=/api
 ENV VITE_AI_BACKEND_URL=${VITE_AI_BACKEND_URL}
 
-RUN npm run typecheck && npm run dev:build
+RUN pnpm run typecheck && pnpm run dev:build
 
 FROM nginx:1.27-alpine
 

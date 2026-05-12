@@ -8,9 +8,19 @@ export type WorkflowOption =
       id?: string | number;
     };
 
-interface WorkflowPayload {
+interface WorkflowField {
+  id?: string;
+  label?: string;
+  kind?: string;
+  description?: string;
+}
+
+interface WorkflowUi {
+  type?: string;
   title?: string;
   options?: WorkflowOption[];
+  actions?: string[];
+  field?: WorkflowField;
 }
 
 interface WorkflowView {
@@ -18,6 +28,11 @@ interface WorkflowView {
   payload?: WorkflowPayload;
   options?: WorkflowOption[];
   tasks?: WorkflowOption[];
+}
+
+interface WorkflowPayload {
+  title?: string;
+  options?: WorkflowOption[];
 }
 
 interface SqlPayload {
@@ -33,7 +48,7 @@ export interface ChatResultPayload {
   options_total_count?: number;
   options_shown_count?: number;
   workflow?: {
-    ui?: WorkflowView;
+    ui?: WorkflowUi;
     view?: WorkflowView;
   };
   sql?: SqlPayload;

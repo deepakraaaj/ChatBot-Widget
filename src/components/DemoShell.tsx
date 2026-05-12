@@ -30,9 +30,12 @@ const RETRYABLE_BACKEND_STATUS_CODES = new Set([502, 503, 504]);
 
 const SAMPLE_PROMPTS: Record<string, string[]> = {
   fits_dev_march_9: [
-    "show tasks status=0",
-    "show tasks status=2",
-    "show tasks",
+    "Show me all pending maintenance tasks",
+    "How many tasks are overdue?",
+    "Which facility has the most open tasks?",
+    "Show tasks due today",
+    "List all facilities",
+    "Show checklist compliance status for this week",
   ],
   vts: [
     "show trips recent_state_id=3",

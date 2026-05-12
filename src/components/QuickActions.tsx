@@ -1,28 +1,39 @@
 import React from "react";
 
+import { getQuickActionSections } from "./chatDiscovery";
+
 interface QuickActionsProps {
   onAction: (text: string) => void;
+  appId?: string;
 }
 
-const QuickActions: React.FC<QuickActionsProps> = ({ onAction }) => {
-  const actions = ["Task status", "Schedule a Task", "Update task status"];
+const QuickActions: React.FC<QuickActionsProps> = ({ onAction, appId }) => {
+  const sections = getQuickActionSections(appId);
+  const showSectionTitles = sections.length > 1;
 
   return (
-    <div className="flex flex-col gap-2 p-1">
-      <div className="text-[11px] font-semibold text-slate-400 mb-1 ml-1 uppercase tracking-[0.16em]">
+    <div className="flex flex-col gap-3 p-1">
+      <div className="ml-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
         Quick Access
       </div>
-      {actions.map((action) => (
-        <button
-          key={action}
-          onClick={() => onAction(action)}
-          className="group text-left px-3 py-2.5 bg-white/95 hover:bg-white border border-slate-200 hover:border-brand-200 rounded-xl text-sm text-slate-700 hover:text-brand-700 transition-all shadow-sm hover:shadow-md active:scale-[0.99]"
-        >
-          <span className="inline-flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-slate-300 group-hover:bg-brand-500 transition-colors" />
-            {action}
-          </span>
-        </button>
+      {sections.map((section) => (
+        <section key={section.title} className="space-y-2">
+          {showSectionTitles ? (
+            <div className="kriti-discovery-section-title">{section.title}</div>
+          ) : null}
+          <div className="kriti-option-group">
+            {section.prompts.map((action) => (
+              <button
+                key={action}
+                type="button"
+                onClick={() => onAction(action)}
+                className="kriti-option-chip kriti-option-chip-discovery"
+              >
+                {action}
+              </button>
+            ))}
+          </div>
+        </section>
       ))}
     </div>
   );

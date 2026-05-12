@@ -8,7 +8,9 @@ import { ReactComponent as PaperPlaneIcon } from "../icons/paper-plane.svg?react
 import { ReactComponent as MicIcon } from "../icons/microphone.svg?react";
 import { cn } from "../lib/cn";
 import MessageBubble from "./MessageBubble";
+import HelpPanel from "./HelpPanel";
 import QuickActions from "./QuickActions";
+import { getEmptyStateDescription } from "./chatDiscovery";
 
 declare const __KRITIBOT_ENABLE_VOICE__: boolean;
 
@@ -22,10 +24,12 @@ const VOICE_ERROR_LABEL: Record<string, string> = {
 const ChatWindow: React.FC = () => {
   const {
     messages,
+    hasMessages,
     sendMessage,
     isStreaming,
     toggleChat,
     connectionStatus,
+    appId,
     appName,
   } =
     useChat();
@@ -190,17 +194,28 @@ const ChatWindow: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5 scroll-smooth no-scrollbar">
-        {messages.length === 0 ? (
-          <div className="h-full flex flex-col justify-end pb-3">
-            <div className="mb-5 px-1">
-              <h3 className="text-xl font-semibold text-slate-900 mb-1">How can I help?</h3>
-              <p className="text-slate-500 text-sm leading-relaxed">
-                {appName
-                  ? `Ask about ${appName} data, status, or recent activity.`
-                  : "Ask about tasks, status updates, or recent activity."}
+        {!hasMessages ? (
+          <div className="min-h-full flex flex-col justify-end gap-4 pb-3">
+            {messages.map((m: ChatMessage, index) => (
+              <MessageBubble
+                key={m.id}
+                message={m}
+                onOptionSelect={sendMessage}
+                isDisabled={m.role === "assistant" && index < messages.length - 1}
+              />
+            ))}
+
+            <div className="mb-1 px-1">
+              <h3 className="text-xl font-semibold text-slate-900 mb-1">
+                How can I help?
+              </h3>
+              <p className="text-sm leading-relaxed text-slate-500">
+                {getEmptyStateDescription(appId, appName)}
               </p>
             </div>
-            <QuickActions onAction={handleSend} />
+
+            <HelpPanel onAction={handleSend} appId={appId} />
+            <QuickActions onAction={handleSend} appId={appId} />
           </div>
         ) : (
           messages.map((m: ChatMessage, index) => (
@@ -247,7 +262,11 @@ const ChatWindow: React.FC = () => {
             value={input}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
-            placeholder={voiceEnabled && isListening ? "Speak now..." : "Ask a question..."}
+            placeholder={
+              voiceEnabled && isListening
+                ? "Speak now..."
+                : "Ask about tasks, facilities, schedules..."
+            }
             className="w-full bg-transparent border-none focus:ring-0 outline-none p-0 text-sm text-slate-700 placeholder-slate-400 resize-none max-h-32 min-h-[22px] py-1 pl-0.5 scrollbar-hide leading-normal"
             rows={1}
             style={{ minHeight: "22px" }}

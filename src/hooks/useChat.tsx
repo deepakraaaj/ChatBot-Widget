@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useReducer,
   useRef,
   useState,
@@ -16,6 +17,7 @@ import {
   type ChatMessage,
   type ChatResultPayload,
 } from "../chat/chatState";
+import { buildWelcomeMessage } from "../components/chatDiscovery";
 
 interface ChatRuntimeContext {
   userId?: string;
@@ -43,6 +45,7 @@ interface ChatProviderProps {
 interface ChatContextValue {
   isOpen: boolean;
   messages: ChatMessage[];
+  hasMessages: boolean;
   isStreaming: boolean;
   connectionStatus: ChatConnectionStatus;
   appId?: string;
@@ -235,6 +238,13 @@ function ChatProvider({
     useState<ChatConnectionStatus>(() => getInitialConnectionStatus(backendUrl));
   const activeSessionScopeKey = `${backendUrl || ""}::${activeAppId || ""}::${activeCompanyId || ""}`;
   const previousSessionScopeKeyRef = useRef<string>(activeSessionScopeKey);
+  const visibleMessages = useMemo(() => {
+    if (!state.isOpen || state.messages.length > 0) {
+      return state.messages;
+    }
+
+    return [buildWelcomeMessage({ appId: activeAppId, appName: activeAppName })];
+  }, [activeAppId, activeAppName, state.isOpen, state.messages]);
 
   useEffect(() => {
     sessionIdRef.current = state.sessionId;
@@ -762,7 +772,8 @@ function ChatProvider({
 
   const value: ChatContextValue = {
     isOpen: state.isOpen,
-    messages: state.messages,
+    messages: visibleMessages,
+    hasMessages: state.messages.length > 0,
     isStreaming: state.isStreaming,
     connectionStatus,
     appId: activeAppId,
